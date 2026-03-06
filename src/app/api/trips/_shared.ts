@@ -25,6 +25,8 @@ export interface TripRow {
   customer_name: string;
   pickup_location: string | null;
   drop_location: string | null;
+  pickup_points: string[] | null;
+  drop_points: string[] | null;
   route: string | null;
   current_stage: string;
   leased_flag: boolean;
@@ -34,6 +36,8 @@ export interface TripRow {
   planned_km: number | string | null;
   schedule_date: string | null;
   trip_amount: number | string | null;
+  material_details: string | null;
+  material_length: string | null;
   requested_by_id: string | null;
   requested_by_name: string | null;
   vehicle_id: string | null;
@@ -67,6 +71,8 @@ export interface NormalizedTrip {
   customerName: string;
   pickupLocation: string;
   dropLocation: string;
+  pickupPoints: string[];
+  dropPoints: string[];
   route: string;
   currentStage: TripStage;
   leasedFlag: boolean;
@@ -76,6 +82,8 @@ export interface NormalizedTrip {
   plannedKm: number;
   scheduleDate: string;
   tripAmount: number | null;
+  materialDetails: string;
+  materialLength: string;
   requestedById: string;
   requestedByName: string;
   salesOwnerId: string;
@@ -115,13 +123,25 @@ function toNullableNumber(value: number | string | null | undefined): number | n
 }
 
 export function normalizeTripRow(row: TripRow): NormalizedTrip {
+  const pickupPoints = Array.isArray(row.pickup_points)
+    ? row.pickup_points.filter((point) => typeof point === "string" && point.trim().length > 0)
+    : [];
+  const dropPoints = Array.isArray(row.drop_points)
+    ? row.drop_points.filter((point) => typeof point === "string" && point.trim().length > 0)
+    : [];
+
+  const normalizedPickupPoints = pickupPoints.length > 0 ? pickupPoints : row.pickup_location ? [row.pickup_location] : [];
+  const normalizedDropPoints = dropPoints.length > 0 ? dropPoints : row.drop_location ? [row.drop_location] : [];
+
   return {
     id: row.id,
     tripCode: row.trip_code,
     customerId: row.customer_id,
     customerName: row.customer_name ?? "",
-    pickupLocation: row.pickup_location ?? "",
-    dropLocation: row.drop_location ?? "",
+    pickupLocation: row.pickup_location ?? normalizedPickupPoints[0] ?? "",
+    dropLocation: row.drop_location ?? normalizedDropPoints[normalizedDropPoints.length - 1] ?? "",
+    pickupPoints: normalizedPickupPoints,
+    dropPoints: normalizedDropPoints,
     route: row.route ?? "",
     currentStage: row.current_stage as TripStage,
     leasedFlag: row.leased_flag,
@@ -131,6 +151,8 @@ export function normalizeTripRow(row: TripRow): NormalizedTrip {
     plannedKm: toNumber(row.planned_km),
     scheduleDate: row.schedule_date ?? "",
     tripAmount: toNullableNumber(row.trip_amount),
+    materialDetails: row.material_details ?? "",
+    materialLength: row.material_length ?? "",
     requestedById: row.requested_by_id ?? "",
     requestedByName: row.requested_by_name ?? "Unknown",
     salesOwnerId: row.sales_consigner_owner_id ?? "",
@@ -198,6 +220,8 @@ export function mapRpcError(message: string, code?: string) {
   if (message?.includes("not_customer_owner")) return NextResponse.json({ ok: false, message: "You can only create requests for your own customers" }, { status: 403 });
   if (message?.includes("not_request_owner")) return NextResponse.json({ ok: false, message: "You can only edit your own trip requests" }, { status: 403 });
   if (message?.includes("vehicle_type_required")) return NextResponse.json({ ok: false, message: "Vehicle type is required" }, { status: 400 });
+  if (message?.includes("pickup_point_required")) return NextResponse.json({ ok: false, message: "At least one pickup point is required" }, { status: 400 });
+  if (message?.includes("drop_point_required")) return NextResponse.json({ ok: false, message: "At least one drop point is required" }, { status: 400 });
   if (message?.includes("unknown_vehicle_type")) return NextResponse.json({ ok: false, message: "Please select a valid vehicle type from Vehicle Master" }, { status: 400 });
   if (message?.includes("unknown_vehicle_length")) return NextResponse.json({ ok: false, message: "Please select a valid vehicle length for selected type" }, { status: 400 });
   if (message?.includes("customer_not_found")) return NextResponse.json({ ok: false, message: "Customer not found" }, { status: 404 });

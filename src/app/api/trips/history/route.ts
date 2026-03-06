@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, message: "Invalid toDate" }, { status: 400 });
   }
 
-  const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc("trip_list_history_v1", {
+  const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc("trip_list_history_v2", {
     p_actor_user_id: actorResult.actor.id,
     p_search: search,
     p_limit: Number.isFinite(limit) ? Math.max(1, Math.min(limit, 500)) : 50,
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
   if (rpcError) {
     if (isMissingRpcError(rpcError)) {
-      return NextResponse.json({ ok: false, message: "Missing RPC: trip_list_history_v1" }, { status: 500 });
+      return NextResponse.json({ ok: false, message: "Missing RPC: trip_list_history_v2" }, { status: 500 });
     }
     return mapRpcError(rpcError.message ?? "Unable to fetch trip history", rpcError.code);
   }

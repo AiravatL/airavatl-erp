@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Trip } from "@/lib/types";
 import { formatDate, formatCurrency } from "@/lib/formatters";
-import { MapPin, Calendar, Weight, Route, User, TruckIcon, IndianRupee, Phone } from "lucide-react";
+import { MapPin, Calendar, Weight, User, TruckIcon, IndianRupee, Phone } from "lucide-react";
 
 export function OverviewTab({ trip }: { trip: Trip }) {
   return (
@@ -11,11 +11,12 @@ export function OverviewTab({ trip }: { trip: Trip }) {
           <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wider">Route & Schedule</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <InfoRow icon={MapPin} label="Pickup" value={trip.pickupLocation || "—"} />
-          <InfoRow icon={MapPin} label="Drop" value={trip.dropLocation || "—"} />
-          <InfoRow icon={Route} label="Planned KM" value={trip.plannedKm ? `${trip.plannedKm} km` : "—"} />
+          <InfoRow icon={MapPin} label="Pickup Points" value={trip.pickupPoints.join(" -> ") || "—"} />
+          <InfoRow icon={MapPin} label="Drop Points" value={trip.dropPoints.join(" -> ") || "—"} />
           <InfoRow icon={Calendar} label="Schedule" value={trip.scheduleDate ? formatDate(trip.scheduleDate) : "—"} />
           <InfoRow icon={Weight} label="Weight" value={trip.weightEstimate ? `${trip.weightEstimate} MT` : "—"} />
+          <InfoRow icon={Weight} label="Material" value={trip.materialDetails || "—"} />
+          <InfoRow icon={Weight} label="Material Length" value={trip.materialLength || "—"} />
           <InfoRow icon={IndianRupee} label="Trip Amount" value={trip.tripAmount ? formatCurrency(trip.tripAmount) : "—"} />
         </CardContent>
       </Card>

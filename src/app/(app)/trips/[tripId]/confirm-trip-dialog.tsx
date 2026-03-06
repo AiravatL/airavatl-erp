@@ -38,7 +38,6 @@ export function ConfirmTripDialog({ trip, onClose, onSuccess }: Props) {
   const [vehicleType, setVehicleType] = useState(trip.vehicleType || "");
   const [vehicleLength, setVehicleLength] = useState(trip.vehicleLength || "");
   const [weightEstimate, setWeightEstimate] = useState(trip.weightEstimate ? String(trip.weightEstimate) : "");
-  const [plannedKm, setPlannedKm] = useState(trip.plannedKm ? String(trip.plannedKm) : "");
   const [scheduleDate, setScheduleDate] = useState(trip.scheduleDate || "");
   const [tripAmount, setTripAmount] = useState(trip.tripAmount ? String(trip.tripAmount) : "");
   const [internalNotes, setInternalNotes] = useState(trip.internalNotes || "");
@@ -89,7 +88,6 @@ export function ConfirmTripDialog({ trip, onClose, onSuccess }: Props) {
         vehicleType: vehicleType.trim() || undefined,
         vehicleLength: vehicleLength.trim() || undefined,
         weightEstimate: weightEstimate ? Number(weightEstimate) : undefined,
-        plannedKm: plannedKm ? Number(plannedKm) : undefined,
         scheduleDate: scheduleDate || undefined,
         tripAmount: tripAmount ? Number(tripAmount) : undefined,
         internalNotes: internalNotes.trim() || undefined,
@@ -220,15 +218,6 @@ export function ConfirmTripDialog({ trip, onClose, onSuccess }: Props) {
                 type="number"
                 value={weightEstimate}
                 onChange={(e) => setWeightEstimate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-gray-600">Planned KM</Label>
-              <Input
-                className="h-8 text-sm"
-                type="number"
-                value={plannedKm}
-                onChange={(e) => setPlannedKm(e.target.value)}
               />
             </div>
           </div>

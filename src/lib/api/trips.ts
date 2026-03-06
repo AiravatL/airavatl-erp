@@ -8,6 +8,8 @@ export interface TripListItem {
   customerName: string;
   pickupLocation: string;
   dropLocation: string;
+  pickupPoints: string[];
+  dropPoints: string[];
   route: string;
   currentStage: TripStage;
   leasedFlag: boolean;
@@ -17,6 +19,8 @@ export interface TripListItem {
   plannedKm: number;
   scheduleDate: string;
   tripAmount: number | null;
+  materialDetails: string;
+  materialLength: string;
   requestedById: string;
   requestedByName: string;
   salesOwnerId: string;
@@ -60,38 +64,43 @@ export interface ListTripHistoryFilters {
 
 export interface CreateTripRequestInput {
   customerId: string;
-  pickupLocation: string;
-  dropLocation: string;
+  pickupPoints: string[];
+  dropPoints: string[];
   vehicleType: string;
   vehicleLength?: string;
   weightEstimate?: number | null;
-  plannedKm?: number | null;
   scheduleDate: string;
   tripAmount?: number | null;
+  materialDetails?: string;
+  materialLength?: string;
   internalNotes?: string;
 }
 
 export interface UpdateTripRequestInput {
-  pickupLocation?: string;
-  dropLocation?: string;
+  pickupPoints?: string[];
+  dropPoints?: string[];
   vehicleType?: string;
   vehicleLength?: string;
   weightEstimate?: number | null;
-  plannedKm?: number | null;
   scheduleDate?: string;
   tripAmount?: number | null;
+  materialDetails?: string;
+  materialLength?: string;
   internalNotes?: string;
 }
 
 export interface ConfirmTripInput {
   pickupLocation?: string;
   dropLocation?: string;
+  pickupPoints?: string[];
+  dropPoints?: string[];
   vehicleType?: string;
   vehicleLength?: string;
   weightEstimate?: number | null;
-  plannedKm?: number | null;
   scheduleDate?: string;
   tripAmount?: number | null;
+  materialDetails?: string;
+  materialLength?: string;
   internalNotes?: string;
   opsVehiclesOwnerId?: string;
 }

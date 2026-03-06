@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createConsignerLead } from "@/lib/api/consigner-crm";
 import { listVehicleMasterOptions } from "@/lib/api/vehicle-master";
@@ -33,13 +34,16 @@ export default function AddLeadPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     companyName: "",
+    companyAddress: "",
     contactPerson: "",
+    contactPersonDesignation: "",
+    natureOfBusiness: "",
     phone: "",
     email: "",
     source: "",
     estimatedValue: "",
     route: "",
-    vehicleType: "",
+    vehicleRequirements: [] as string[],
     priority: "medium",
     notes: "",
     nextFollowUp: "",
@@ -51,7 +55,12 @@ export default function AddLeadPage() {
         case "companyName":
           return sanitizeSingleLineInput(value, FIELD_LIMITS.companyName);
         case "contactPerson":
+        case "contactPersonDesignation":
           return sanitizeSingleLineInput(value, FIELD_LIMITS.fullName);
+        case "companyAddress":
+          return sanitizeSingleLineInput(value, FIELD_LIMITS.address);
+        case "natureOfBusiness":
+          return sanitizeSingleLineInput(value, FIELD_LIMITS.companyName);
         case "phone":
         case "nextFollowUp":
           return field === "phone" ? sanitizePhoneInput(value, FIELD_LIMITS.phoneDigits) : value;
@@ -89,20 +98,24 @@ export default function AddLeadPage() {
   const vehicleMaster = vehicleMasterQuery.data ?? [];
   const hasMasterOptions = vehicleMaster.length > 0;
   const vehicleTypeOptions = hasMasterOptions
-    ? Array.from(new Set([form.vehicleType, ...vehicleMaster.map((type) => type.name)].filter(Boolean)))
-    : Array.from(new Set([form.vehicleType, ...FALLBACK_VEHICLE_TYPES].filter(Boolean)));
+    ? Array.from(new Set(vehicleMaster.map((type) => type.name).filter(Boolean)))
+    : FALLBACK_VEHICLE_TYPES;
 
   const createMutation = useMutation({
     mutationFn: () =>
       createConsignerLead({
         companyName: normalizeSingleLineForSubmit(form.companyName, FIELD_LIMITS.companyName),
+        companyAddress: normalizeSingleLineForSubmit(form.companyAddress, FIELD_LIMITS.address) || undefined,
         contactPerson: normalizeSingleLineForSubmit(form.contactPerson, FIELD_LIMITS.fullName),
+        contactPersonDesignation:
+          normalizeSingleLineForSubmit(form.contactPersonDesignation, FIELD_LIMITS.fullName) || undefined,
+        natureOfBusiness: normalizeSingleLineForSubmit(form.natureOfBusiness, FIELD_LIMITS.companyName) || undefined,
         phone: form.phone.trim(),
         email: normalizeSingleLineForSubmit(form.email, FIELD_LIMITS.email) || undefined,
         source: form.source as LeadSource,
         estimatedValue: form.estimatedValue ? Number(form.estimatedValue) : undefined,
         route: normalizeSingleLineForSubmit(form.route, FIELD_LIMITS.location) || undefined,
-        vehicleType: form.vehicleType || undefined,
+        vehicleRequirements: form.vehicleRequirements,
         priority: (form.priority as LeadPriority) || "medium",
         notes: normalizeMultilineForSubmit(form.notes, FIELD_LIMITS.notes) || undefined,
         nextFollowUp: form.nextFollowUp || null,
@@ -168,6 +181,33 @@ export default function AddLeadPage() {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="companyAddress" className="text-sm font-medium">Company Address</Label>
+                <Input
+                  id="companyAddress"
+                  placeholder="e.g. GIDC, Vapi, Gujarat"
+                  value={form.companyAddress}
+                  onChange={(e) => updateField("companyAddress", e.target.value)}
+                  className="h-9 text-sm"
+                  maxLength={FIELD_LIMITS.address}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="contactPersonDesignation" className="text-sm font-medium">
+                  Contact Person Designation
+                </Label>
+                <Input
+                  id="contactPersonDesignation"
+                  placeholder="e.g. Procurement Manager"
+                  value={form.contactPersonDesignation}
+                  onChange={(e) => updateField("contactPersonDesignation", e.target.value)}
+                  className="h-9 text-sm"
+                  maxLength={FIELD_LIMITS.fullName}
+                />
+              </div>
+            </div>
+
             {/* Phone + Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -198,6 +238,20 @@ export default function AddLeadPage() {
                   autoCapitalize="none"
                   spellCheck={false}
                   maxLength={FIELD_LIMITS.email}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="natureOfBusiness" className="text-sm font-medium">Nature Of Business</Label>
+                <Input
+                  id="natureOfBusiness"
+                  placeholder="e.g. Steel Manufacturing"
+                  value={form.natureOfBusiness}
+                  onChange={(e) => updateField("natureOfBusiness", e.target.value)}
+                  className="h-9 text-sm"
+                  maxLength={FIELD_LIMITS.companyName}
                 />
               </div>
             </div>
@@ -234,8 +288,8 @@ export default function AddLeadPage() {
               </div>
             </div>
 
-            {/* Value + Route + Vehicle Type */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Value + Route */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="estimatedValue" className="text-sm font-medium">
                   Estimated Value (₹)
@@ -263,22 +317,36 @@ export default function AddLeadPage() {
                   maxLength={FIELD_LIMITS.location}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Vehicle Type</Label>
-                <Select value={form.vehicleType} onValueChange={(v) => updateField("vehicleType", v)}>
-                  <SelectTrigger className="w-full h-9 text-sm">
-                    <SelectValue placeholder="Select vehicle type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicleTypeOptions.map((v) => (
-                      <SelectItem key={v} value={v}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {vehicleMasterQuery.isError && (
-                  <p className="text-[11px] text-amber-600">Using fallback vehicle types</p>
-                )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Vehicle Requirement (Multi Select)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-md border border-gray-200 p-3">
+                {vehicleTypeOptions.map((vehicleType) => {
+                  const checked = form.vehicleRequirements.includes(vehicleType);
+                  return (
+                    <label key={vehicleType} className="flex items-center gap-2 text-sm text-gray-700">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(value) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            vehicleRequirements: value
+                              ? prev.vehicleRequirements.includes(vehicleType)
+                                ? prev.vehicleRequirements
+                                : [...prev.vehicleRequirements, vehicleType]
+                              : prev.vehicleRequirements.filter((item) => item !== vehicleType),
+                          }));
+                        }}
+                      />
+                      <span>{vehicleType}</span>
+                    </label>
+                  );
+                })}
               </div>
+              {vehicleMasterQuery.isError && (
+                <p className="text-[11px] text-amber-600">Using fallback vehicle types</p>
+              )}
             </div>
 
             {/* Next Follow-up */}

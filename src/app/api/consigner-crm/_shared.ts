@@ -33,13 +33,17 @@ export interface ConsignerCrmActor {
 export interface ConsignerLeadRow {
   id: string;
   company_name: string;
+  company_address: string | null;
   contact_person: string;
+  contact_person_designation: string | null;
+  nature_of_business: string | null;
   phone: string;
   email: string | null;
   source: string;
   estimated_value: number | string | null;
   route: string | null;
   vehicle_type: string | null;
+  vehicle_requirements: string[] | null;
   stage: LeadStage;
   priority: string;
   notes: string | null;
@@ -68,16 +72,24 @@ function toNumber(value: number | string | null | undefined): number {
 }
 
 export function normalizeConsignerLeadRow(row: ConsignerLeadRow): Lead {
+  const requirements = Array.isArray(row.vehicle_requirements)
+    ? row.vehicle_requirements.filter((value) => typeof value === "string" && value.trim().length > 0)
+    : [];
+
   return {
     id: row.id,
     companyName: row.company_name,
+    companyAddress: row.company_address ?? "",
     contactPerson: row.contact_person,
+    contactPersonDesignation: row.contact_person_designation ?? "",
+    natureOfBusiness: row.nature_of_business ?? "",
     phone: row.phone,
     email: row.email ?? "",
     source: row.source as Lead["source"],
     estimatedValue: toNumber(row.estimated_value),
     route: row.route ?? "",
-    vehicleType: row.vehicle_type ?? "",
+    vehicleType: row.vehicle_type ?? requirements[0] ?? "",
+    vehicleRequirements: requirements,
     stage: row.stage,
     priority: row.priority as Lead["priority"],
     notes: row.notes ?? "",

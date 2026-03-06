@@ -11,13 +11,16 @@ export interface ListConsignerLeadsFilters {
 
 export interface CreateConsignerLeadInput {
   companyName: string;
+  companyAddress?: string;
   contactPerson: string;
+  contactPersonDesignation?: string;
+  natureOfBusiness?: string;
   phone: string;
   email?: string;
   source: LeadSource;
   estimatedValue?: number | null;
   route?: string;
-  vehicleType?: string;
+  vehicleRequirements?: string[];
   priority?: LeadPriority;
   notes?: string;
   nextFollowUp?: string | null;
@@ -25,12 +28,15 @@ export interface CreateConsignerLeadInput {
 
 export interface UpdateConsignerLeadInput {
   companyName?: string;
+  companyAddress?: string;
   contactPerson?: string;
+  contactPersonDesignation?: string;
+  natureOfBusiness?: string;
   phone?: string;
   email?: string;
   estimatedValue?: number | null;
   route?: string;
-  vehicleType?: string;
+  vehicleRequirements?: string[];
   priority?: LeadPriority;
   notes?: string;
   nextFollowUp?: string | null;

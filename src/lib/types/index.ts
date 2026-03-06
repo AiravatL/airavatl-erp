@@ -148,6 +148,8 @@ export interface Trip {
   customerName: string;
   pickupLocation: string;
   dropLocation: string;
+  pickupPoints: string[];
+  dropPoints: string[];
   route: string;
   currentStage: TripStage;
   leasedFlag: boolean;
@@ -157,6 +159,8 @@ export interface Trip {
   plannedKm: number;
   scheduleDate: string;
   tripAmount: number | null;
+  materialDetails: string;
+  materialLength: string;
   requestedById: string;
   requestedByName: string;
   salesOwnerId: string;
@@ -325,13 +329,14 @@ export const LEAD_STAGES: LeadStage[] = [
   "new_enquiry", "contacted", "quote_sent", "negotiation", "won", "lost",
 ];
 
-export type LeadSource = "referral" | "website" | "cold_call" | "existing_customer";
+export type LeadSource = "referral" | "website" | "cold_call" | "existing_customer" | "field_visit";
 
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   referral: "Referral",
   website: "Website",
   cold_call: "Cold Call",
   existing_customer: "Existing Customer",
+  field_visit: "Field Visit",
 };
 
 export type LeadPriority = "low" | "medium" | "high";
@@ -339,13 +344,17 @@ export type LeadPriority = "low" | "medium" | "high";
 export interface Lead {
   id: string;
   companyName: string;
+  companyAddress: string;
   contactPerson: string;
+  contactPersonDesignation: string;
+  natureOfBusiness: string;
   phone: string;
   email: string;
   source: LeadSource;
   estimatedValue: number;
   route: string;
   vehicleType: string;
+  vehicleRequirements: string[];
   stage: LeadStage;
   priority: LeadPriority;
   notes: string;

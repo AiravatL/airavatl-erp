@@ -36,7 +36,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/validation/cli
 import {
   ArrowLeft, Phone, Mail, MapPin, IndianRupee, Truck, Calendar,
   MessageSquare, PhoneCall, Video, StickyNote, ArrowRightLeft,
-  Loader2, AlertTriangle,
+  Loader2, AlertTriangle, User,
 } from "lucide-react";
 
 const STAGE_COLORS: Record<LeadStage, string> = {
@@ -367,6 +367,24 @@ export default function LeadDetailPage() {
                 <Phone className="h-3.5 w-3.5 text-gray-400" />
                 {lead.phone}
               </div>
+              {lead.companyAddress && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                  {lead.companyAddress}
+                </div>
+              )}
+              {lead.contactPersonDesignation && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <User className="h-3.5 w-3.5 text-gray-400" />
+                  {lead.contactPersonDesignation}
+                </div>
+              )}
+              {lead.natureOfBusiness && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <StickyNote className="h-3.5 w-3.5 text-gray-400" />
+                  {lead.natureOfBusiness}
+                </div>
+              )}
               {lead.email && (
                 <div className="flex items-center gap-2 text-gray-600">
                   <Mail className="h-3.5 w-3.5 text-gray-400" />
@@ -383,10 +401,10 @@ export default function LeadDetailPage() {
                 <IndianRupee className="h-3.5 w-3.5 text-gray-400" />
                 {formatCurrency(lead.estimatedValue)}
               </div>
-              {lead.vehicleType && (
+              {lead.vehicleRequirements.length > 0 && (
                 <div className="flex items-center gap-2 text-gray-600">
                   <Truck className="h-3.5 w-3.5 text-gray-400" />
-                  {lead.vehicleType}
+                  {lead.vehicleRequirements.join(", ")}
                 </div>
               )}
               {lead.nextFollowUp && (

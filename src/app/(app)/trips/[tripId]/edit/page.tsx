@@ -28,20 +28,21 @@ import {
   sanitizeMultilineInput,
   sanitizeSingleLineInput,
 } from "@/lib/validation/client/sanitizers";
-import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/validation/client/validators";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { sanitizeDecimalInput } from "@/lib/validation/client/validators";
+import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
 
 export default function EditTripRequestPage({ params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = use(params);
   const router = useRouter();
   const { user } = useAuth();
 
-  const [pickupLocation, setPickupLocation] = useState("");
-  const [dropLocation, setDropLocation] = useState("");
+  const [pickupPoints, setPickupPoints] = useState<string[]>([""]);
+  const [dropPoints, setDropPoints] = useState<string[]>([""]);
   const [vehicleType, setVehicleType] = useState("");
   const [vehicleLength, setVehicleLength] = useState("");
   const [weightEstimate, setWeightEstimate] = useState("");
-  const [plannedKm, setPlannedKm] = useState("");
+  const [materialDetails, setMaterialDetails] = useState("");
+  const [materialLength, setMaterialLength] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [tripAmount, setTripAmount] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
@@ -65,12 +66,13 @@ export default function EditTripRequestPage({ params }: { params: Promise<{ trip
   useEffect(() => {
     if (trip && !initialized) {
       const rafId = window.requestAnimationFrame(() => {
-        setPickupLocation(trip.pickupLocation || "");
-        setDropLocation(trip.dropLocation || "");
+        setPickupPoints(trip.pickupPoints.length > 0 ? trip.pickupPoints : [trip.pickupLocation || ""]);
+        setDropPoints(trip.dropPoints.length > 0 ? trip.dropPoints : [trip.dropLocation || ""]);
         setVehicleType(trip.vehicleType || "");
         setVehicleLength(trip.vehicleLength || "");
         setWeightEstimate(trip.weightEstimate ? String(trip.weightEstimate) : "");
-        setPlannedKm(trip.plannedKm ? String(trip.plannedKm) : "");
+        setMaterialDetails(trip.materialDetails || "");
+        setMaterialLength(trip.materialLength || "");
         setScheduleDate(trip.scheduleDate || "");
         setTripAmount(trip.tripAmount ? String(trip.tripAmount) : "");
         setInternalNotes(trip.internalNotes || "");
@@ -95,12 +97,17 @@ export default function EditTripRequestPage({ params }: { params: Promise<{ trip
   const updateMutation = useMutation({
     mutationFn: () =>
       updateTripRequest(tripId, {
-        pickupLocation: normalizeSingleLineForSubmit(pickupLocation, FIELD_LIMITS.location),
-        dropLocation: normalizeSingleLineForSubmit(dropLocation, FIELD_LIMITS.location),
+        pickupPoints: pickupPoints
+          .map((point) => normalizeSingleLineForSubmit(point, FIELD_LIMITS.location))
+          .filter(Boolean),
+        dropPoints: dropPoints
+          .map((point) => normalizeSingleLineForSubmit(point, FIELD_LIMITS.location))
+          .filter(Boolean),
         vehicleType,
         vehicleLength: vehicleLength || undefined,
         weightEstimate: weightEstimate ? Number(weightEstimate) : null,
-        plannedKm: plannedKm ? Number(plannedKm) : null,
+        materialDetails: normalizeSingleLineForSubmit(materialDetails, FIELD_LIMITS.address) || undefined,
+        materialLength: normalizeSingleLineForSubmit(materialLength, FIELD_LIMITS.vehicleCapacity) || undefined,
         scheduleDate,
         tripAmount: tripAmount ? Number(tripAmount) : null,
         internalNotes: normalizeMultilineForSubmit(internalNotes, FIELD_LIMITS.notes) || undefined,
@@ -139,12 +146,20 @@ export default function EditTripRequestPage({ params }: { params: Promise<{ trip
     Boolean(vehicleType) && selectedTypeLengthOptions.length === 0 && allActiveLengthOptions.length > 0;
   const isVehicleLengthValid = vehicleLengthOptions.length === 0 || vehicleLengthOptions.includes(vehicleLength);
   const canSubmit =
-    normalizeSingleLineForSubmit(pickupLocation, FIELD_LIMITS.location) &&
-    normalizeSingleLineForSubmit(dropLocation, FIELD_LIMITS.location) &&
+    pickupPoints.some((point) => Boolean(normalizeSingleLineForSubmit(point, FIELD_LIMITS.location))) &&
+    dropPoints.some((point) => Boolean(normalizeSingleLineForSubmit(point, FIELD_LIMITS.location))) &&
     vehicleType &&
     (vehicleLengthOptions.length === 0 || Boolean(vehicleLength)) &&
     isVehicleLengthValid &&
     scheduleDate;
+
+  const updatePickupPoint = (index: number, value: string) => {
+    setPickupPoints((prev) => prev.map((item, i) => (i === index ? sanitizeSingleLineInput(value, FIELD_LIMITS.location) : item)));
+  };
+
+  const updateDropPoint = (index: number, value: string) => {
+    setDropPoints((prev) => prev.map((item, i) => (i === index ? sanitizeSingleLineInput(value, FIELD_LIMITS.location) : item)));
+  };
 
   const handleVehicleTypeChange = (nextType: string) => {
     setVehicleType(nextType);
@@ -192,31 +207,84 @@ export default function EditTripRequestPage({ params }: { params: Promise<{ trip
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-gray-600">Pickup Location *</Label>
-              <Input
-                className="h-9 text-sm"
-                placeholder="e.g., Jamshedpur, JH"
-                value={pickupLocation}
-                onChange={(e) =>
-                  setPickupLocation(sanitizeSingleLineInput(e.target.value, FIELD_LIMITS.location))
-                }
-                maxLength={FIELD_LIMITS.location}
-              />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-gray-600">Pickup Points *</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setPickupPoints((prev) => [...prev, ""])}
+                disabled={pickupPoints.length >= 8}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add Pickup
+              </Button>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-gray-600">Drop Location *</Label>
-              <Input
-                className="h-9 text-sm"
-                placeholder="e.g., Mumbai, MH"
-                value={dropLocation}
-                onChange={(e) =>
-                  setDropLocation(sanitizeSingleLineInput(e.target.value, FIELD_LIMITS.location))
-                }
-                maxLength={FIELD_LIMITS.location}
-              />
+            {pickupPoints.map((pickupPoint, index) => (
+              <div key={`pickup-${index}`} className="flex items-center gap-2">
+                <Input
+                  className="h-9 text-sm"
+                  placeholder={`Pickup ${index + 1}`}
+                  value={pickupPoint}
+                  onChange={(e) => updatePickupPoint(index, e.target.value)}
+                  maxLength={FIELD_LIMITS.location}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="h-9 w-9"
+                  onClick={() =>
+                    setPickupPoints((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev))
+                  }
+                  disabled={pickupPoints.length === 1}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-gray-600">Drop Points *</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setDropPoints((prev) => [...prev, ""])}
+                disabled={dropPoints.length >= 8}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add Drop
+              </Button>
             </div>
+            {dropPoints.map((dropPoint, index) => (
+              <div key={`drop-${index}`} className="flex items-center gap-2">
+                <Input
+                  className="h-9 text-sm"
+                  placeholder={`Drop ${index + 1}`}
+                  value={dropPoint}
+                  onChange={(e) => updateDropPoint(index, e.target.value)}
+                  maxLength={FIELD_LIMITS.location}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="h-9 w-9"
+                  onClick={() =>
+                    setDropPoints((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev))
+                  }
+                  disabled={dropPoints.length === 1}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -297,19 +365,28 @@ export default function EditTripRequestPage({ params }: { params: Promise<{ trip
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-gray-600">Planned KM</Label>
+              <Label className="text-xs text-gray-600">Material Details</Label>
               <Input
                 className="h-9 text-sm"
-                type="text"
-                inputMode="numeric"
-                placeholder="e.g., 1650"
-                value={plannedKm}
-                onChange={(e) => setPlannedKm(sanitizeIntegerInput(e.target.value, FIELD_LIMITS.distanceDigits))}
+                placeholder="e.g., MS Coil"
+                value={materialDetails}
+                onChange={(e) => setMaterialDetails(sanitizeSingleLineInput(e.target.value, FIELD_LIMITS.address))}
+                maxLength={FIELD_LIMITS.address}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-gray-600">Material Length</Label>
+              <Input
+                className="h-9 text-sm"
+                placeholder="e.g., 24 ft (optional)"
+                value={materialLength}
+                onChange={(e) => setMaterialLength(sanitizeSingleLineInput(e.target.value, FIELD_LIMITS.vehicleCapacity))}
+                maxLength={FIELD_LIMITS.vehicleCapacity}
+              />
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-gray-600">Schedule Date *</Label>
               <Input
