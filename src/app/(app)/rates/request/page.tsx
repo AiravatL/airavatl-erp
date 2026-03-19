@@ -25,7 +25,7 @@ import {
   sanitizeSingleLineInput,
 } from "@/lib/validation/client/sanitizers";
 
-const REQUEST_ROLES: Role[] = ["sales_consigner", "operations_consigner", "admin", "super_admin"];
+const REQUEST_ROLES: Role[] = ["sales_consigner", "operations", "admin", "super_admin"];
 
 const RATE_CATEGORIES: RateCategory[] = ["ftl", "ptl", "odc", "container", "express"];
 

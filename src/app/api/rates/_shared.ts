@@ -8,13 +8,13 @@ export const dynamic = "force-dynamic";
 
 export const RATE_CREATOR_ROLES: Role[] = [
   "sales_vehicles",
-  "operations_vehicles",
+  "operations",
   ...ADMIN_ROLES,
 ];
 
-export const RATE_REVIEWER_ROLES: Role[] = ["operations_vehicles", ...ADMIN_ROLES];
+export const RATE_REVIEWER_ROLES: Role[] = ["operations", ...ADMIN_ROLES];
 export const RATE_REVIEW_VIEW_ROLES: Role[] = ["sales_vehicles", ...RATE_REVIEWER_ROLES];
-export const RATE_AUTO_APPROVE_ROLES: Role[] = ["operations_vehicles", ...ADMIN_ROLES];
+export const RATE_AUTO_APPROVE_ROLES: Role[] = ["operations", ...ADMIN_ROLES];
 
 interface ProfileRow {
   id: string;

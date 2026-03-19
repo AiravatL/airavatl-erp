@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireServerActor } from "@/lib/auth/server-actor";
 import { isMissingRpcError } from "@/lib/supabase/rpc";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 interface VendorRow {
   id: string;
@@ -10,25 +10,8 @@ interface VendorRow {
 }
 
 export async function GET(request: Request) {
-  const supabase = await getSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role, active")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !profile.active) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
-  }
+  const actorResult = await requireServerActor();
+  if ("error" in actorResult) return actorResult.error;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search")?.trim() || null;
@@ -37,8 +20,8 @@ export async function GET(request: Request) {
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(limit, 500)) : 100;
   const safeOffset = Number.isFinite(offset) ? Math.max(0, offset) : 0;
 
-  const { data: rpcData, error: rpcError } = await supabase.rpc("vendor_list_v1", {
-    p_actor: profile.id,
+  const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc("vendor_list_v1", {
+    p_actor: actorResult.actor.id,
     p_search: search,
     p_limit: safeLimit,
     p_offset: safeOffset,

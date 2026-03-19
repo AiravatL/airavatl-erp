@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { isMissingRpcError } from "@/lib/supabase/rpc";
+import { requireServerActor } from "@/lib/auth/server-actor";
 import type { Role, TripStage } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -8,15 +7,17 @@ export const dynamic = "force-dynamic";
 const TRIP_ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
-  "operations_consigner",
-  "operations_vehicles",
   "sales_consigner",
+  "operations",
+  "accounts",
 ];
 
 export interface TripActor {
   id: string;
   role: Role;
 }
+
+// -- Legacy types (used by old trip API routes) --
 
 export interface TripRow {
   id: string;
@@ -180,41 +181,30 @@ export function normalizeTripRow(row: TripRow): NormalizedTrip {
   };
 }
 
+// -- Auth helper (shared by both old and new trip routes) --
+
 export async function requireTripActor() {
-  const supabase = await getSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { error: NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 }) };
-  }
-
-  const { data: role, error: rpcError } = await supabase.rpc("trip_assert_actor_v1", {
-    p_actor_user_id: user.id,
-  } as never);
-
-  if (rpcError) {
-    if (isMissingRpcError(rpcError)) {
-      return { error: NextResponse.json({ ok: false, message: "Missing RPC: trip_assert_actor_v1" }, { status: 500 }) };
-    }
-    return { error: mapRpcError(rpcError.message ?? "Unauthorized", rpcError.code) };
-  }
-
-  if (!role) {
-    return { error: NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 }) };
-  }
-
-  const actor = { id: user.id, role: role as Role } satisfies TripActor;
-
-  if (!TRIP_ALLOWED_ROLES.includes(actor.role)) {
-    return { error: NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 }) };
-  }
-
-  return { supabase, actor };
+  const actorResult = await requireServerActor(TRIP_ALLOWED_ROLES);
+  if ("error" in actorResult) return actorResult;
+  return { supabase: actorResult.supabase, actor: { id: actorResult.actor.id, role: actorResult.actor.role as Role } };
 }
 
+// -- Error mappers --
+
+/** New auction-trip error mapper */
+export function mapTripRpcError(message: string, code?: string) {
+  if (message?.includes("forbidden"))
+    return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
+  if (message?.includes("trip_not_found"))
+    return NextResponse.json({ ok: false, message: "Trip not found" }, { status: 404 });
+  if (message?.includes("trip_access_denied"))
+    return NextResponse.json({ ok: false, message: "You do not have access to this trip" }, { status: 403 });
+  if (code === "42501")
+    return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
+  return NextResponse.json({ ok: false, message }, { status: 500 });
+}
+
+/** Legacy error mapper (used by old trip routes — payment, vehicle assignment, etc.) */
 export function mapRpcError(message: string, code?: string) {
   if (message?.includes("permission_denied")) return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   if (message?.includes("not_customer_owner")) return NextResponse.json({ ok: false, message: "You can only create requests for your own customers" }, { status: 403 });

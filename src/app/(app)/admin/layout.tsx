@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const ADMIN_TABS = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/vehicle-master", label: "Vehicle Master" },
+  { href: "/admin/settings", label: "Settings" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

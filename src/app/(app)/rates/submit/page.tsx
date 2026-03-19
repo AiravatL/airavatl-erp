@@ -11,9 +11,9 @@ import { useAuth } from "@/lib/auth/auth-context";
 import type { Role } from "@/lib/types";
 import { ClipboardList } from "lucide-react";
 
-const SUBMIT_ROLES: Role[] = ["sales_vehicles", "operations_vehicles", "admin", "super_admin"];
-const AUTO_APPROVE_ROLES: Role[] = ["operations_vehicles", "admin", "super_admin"];
-const REVIEW_ROLES: Role[] = ["operations_vehicles", "admin", "super_admin"];
+const SUBMIT_ROLES: Role[] = ["sales_vehicles", "operations", "admin", "super_admin"];
+const AUTO_APPROVE_ROLES: Role[] = ["operations", "admin", "super_admin"];
+const REVIEW_ROLES: Role[] = ["operations", "admin", "super_admin"];
 
 function isRoleAllowed(role: Role, allowed: Role[]): boolean {
   return allowed.includes(role);

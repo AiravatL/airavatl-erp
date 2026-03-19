@@ -91,7 +91,6 @@ export default function LeadDetailPage() {
   const [winConvertForm, setWinConvertForm] = useState({
     creditDays: "30",
     creditLimit: "0",
-    address: "",
     gstin: "",
   });
 
@@ -136,12 +135,12 @@ export default function LeadDetailPage() {
       winAndConvertConsignerLead(leadId, {
         creditDays: Number(winConvertForm.creditDays) || 30,
         creditLimit: Number(winConvertForm.creditLimit) || 0,
-        address: sanitizeSingleLineInput(winConvertForm.address, FIELD_LIMITS.address).trim() || undefined,
+        address: lead?.companyAddress || undefined,
         gstin: sanitizeSingleLineInput(winConvertForm.gstin.toUpperCase(), FIELD_LIMITS.gstin).trim() || undefined,
       }),
     onSuccess: () => {
       setShowWinConvert(false);
-      setWinConvertForm({ creditDays: "30", creditLimit: "0", address: "", gstin: "" });
+      setWinConvertForm({ creditDays: "30", creditLimit: "0", gstin: "" });
       invalidateAll();
     },
   });
@@ -254,7 +253,7 @@ export default function LeadDetailPage() {
         onOpenChange={(open) => {
           if (!open) {
             setShowWinConvert(false);
-            setWinConvertForm({ creditDays: "30", creditLimit: "0", address: "", gstin: "" });
+            setWinConvertForm({ creditDays: "30", creditLimit: "0", gstin: "" });
           }
         }}
       >
@@ -301,20 +300,6 @@ export default function LeadDetailPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Address</Label>
-              <Input
-                value={winConvertForm.address}
-                onChange={(e) =>
-                  setWinConvertForm((p) => ({
-                    ...p,
-                    address: sanitizeSingleLineInput(e.target.value, FIELD_LIMITS.address),
-                  }))
-                }
-                className="h-8 text-sm"
-                maxLength={FIELD_LIMITS.address}
-              />
-            </div>
-            <div className="space-y-1">
               <Label className="text-xs">GSTIN</Label>
               <Input
                 value={winConvertForm.gstin}
@@ -340,7 +325,7 @@ export default function LeadDetailPage() {
               size="sm"
               onClick={() => {
                 setShowWinConvert(false);
-                setWinConvertForm({ creditDays: "30", creditLimit: "0", address: "", gstin: "" });
+                setWinConvertForm({ creditDays: "30", creditLimit: "0", gstin: "" });
               }}
             >
               Cancel

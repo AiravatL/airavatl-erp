@@ -4,9 +4,9 @@ import { type NextRequest, NextResponse } from "next/server";
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // API routes handle their own auth. Skip middleware auth calls to avoid
-  // extra Supabase requests on every API hit.
   if (pathname.startsWith("/api/")) {
+    // API routes handle their own auth. Skip middleware auth calls to avoid
+    // extra Supabase requests on every API hit.
     return NextResponse.next({ request });
   }
 

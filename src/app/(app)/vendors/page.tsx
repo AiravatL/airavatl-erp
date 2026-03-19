@@ -3,519 +3,385 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  createColumnHelper,
+} from "@tanstack/react-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/lib/auth/auth-context";
-import { listLeasedVehicles } from "@/lib/api/leased-vehicles";
-import { listFleetVehicles, listFleetVendors } from "@/lib/api/fleet";
-import { listVehicleMasterOptions } from "@/lib/api/vehicle-master";
+import { listAppUsers, type AppUser } from "@/lib/api/fleet-users";
 import { queryKeys } from "@/lib/query/keys";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
-import { Plus, Search, Phone, Truck, Building2, Gauge, AlertTriangle, UserRound } from "lucide-react";
+import { Search, Truck, Building2, UserRound } from "lucide-react";
 
-type FleetTab = "all_vehicles" | "vendors" | "leased_vehicles";
+type FleetTab = "drivers" | "transporters";
 
-const KYC_COLORS: Record<string, string> = {
-  verified: "bg-emerald-50 text-emerald-700",
-  pending: "bg-amber-50 text-amber-700",
-  rejected: "bg-red-50 text-red-700",
-};
+/* ---------- Column definitions ---------- */
 
-const VEHICLE_STATUS_COLORS: Record<string, string> = {
-  available: "bg-emerald-50 text-emerald-700",
-  on_trip: "bg-blue-50 text-blue-700",
-  maintenance: "bg-amber-50 text-amber-700",
-};
+const driverCol = createColumnHelper<AppUser>();
 
-const OWNERSHIP_COLORS = {
-  leased: "bg-indigo-50 text-indigo-700",
-  vendor: "bg-gray-100 text-gray-700",
-  owner_driver: "bg-violet-50 text-violet-700",
-} as const;
+const driverColumns = [
+  driverCol.accessor("fullName", {
+    header: "Name",
+    cell: (info) => (
+      <Link
+        href={`/vendors/user/${info.row.original.id}`}
+        className="font-medium text-gray-900 hover:underline"
+      >
+        {info.getValue()}
+      </Link>
+    ),
+  }),
+  driverCol.accessor("phone", {
+    header: "Phone",
+    cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
+  }),
+  driverCol.accessor("city", {
+    header: "City",
+    cell: (info) => (
+      <span className="text-gray-600">{info.getValue() ?? "—"}</span>
+    ),
+  }),
+  driverCol.accessor("vehicleNumber", {
+    header: "Vehicle",
+    cell: (info) => {
+      const number = info.getValue();
+      const type = info.row.original.vehicleType;
+      if (!number) return <span className="text-gray-300">—</span>;
+      return (
+        <span className="text-gray-600">
+          {number} <span className="text-gray-400">&middot;</span> {type}
+        </span>
+      );
+    },
+  }),
+  driverCol.accessor("documentsVerified", {
+    header: "Docs Status",
+    cell: (info) => <DocsBadge verified={info.getValue()} />,
+  }),
+];
 
-const WRITE_ROLES = ["admin", "super_admin"];
+const transporterCol = createColumnHelper<AppUser>();
+
+const transporterColumns = [
+  transporterCol.accessor("accountName", {
+    header: "Organization",
+    cell: (info) => (
+      <Link
+        href={`/vendors/user/${info.row.original.id}`}
+        className="font-medium text-gray-900 hover:underline"
+      >
+        {info.getValue() ?? info.row.original.fullName}
+      </Link>
+    ),
+  }),
+  transporterCol.accessor("fullName", {
+    header: "Name",
+    cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
+  }),
+  transporterCol.accessor("phone", {
+    header: "Phone",
+    cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
+  }),
+  transporterCol.accessor("city", {
+    header: "City",
+    cell: (info) => (
+      <span className="text-gray-600">{info.getValue() ?? "—"}</span>
+    ),
+  }),
+  transporterCol.accessor("documentsVerified", {
+    header: "Docs Status",
+    cell: (info) => <DocsBadge verified={info.getValue()} />,
+  }),
+];
+
+/* ---------- Page ---------- */
 
 export default function FleetPage() {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<FleetTab>("all_vehicles");
-  const [allVehicleType, setAllVehicleType] = useState("all");
-  const [allOwnershipKind, setAllOwnershipKind] = useState("all");
-  const [vendorVehicleType, setVendorVehicleType] = useState("all");
-  const [vendorKind, setVendorKind] = useState("all");
-  const canWrite = !!user && WRITE_ROLES.includes(user.role);
+  const [activeTab, setActiveTab] = useState<FleetTab>("drivers");
 
-  const vehicleMasterQuery = useQuery({
-    queryKey: queryKeys.vehicleMasterOptions,
-    queryFn: listVehicleMasterOptions,
+  const driverFilters = {
+    userType: "individual_driver",
+    search: search || undefined,
+    limit: 200,
+  };
+  const transporterFilters = {
+    userType: "transporter",
+    search: search || undefined,
+    limit: 200,
+  };
+
+  const driversQuery = useQuery({
+    queryKey: queryKeys.fleetAppUsers(driverFilters),
+    queryFn: () => listAppUsers(driverFilters),
     enabled: !!user,
   });
 
-  const masterTypes = vehicleMasterQuery.data?.map((type) => type.name) ?? [];
-
-  const fleetVehiclesQuery = useQuery({
-    queryKey: queryKeys.fleetVehicles({
-      search,
-      ownershipKind: allOwnershipKind,
-      vehicleType: allVehicleType,
-    }),
-    queryFn: () =>
-      listFleetVehicles({
-        search: search || undefined,
-        ownershipKind:
-          allOwnershipKind === "leased" || allOwnershipKind === "vendor" || allOwnershipKind === "owner_driver"
-            ? allOwnershipKind
-            : undefined,
-        vehicleType: allVehicleType !== "all" ? allVehicleType : undefined,
-        limit: 300,
-      }),
-    enabled: !!user && activeTab === "all_vehicles",
+  const transportersQuery = useQuery({
+    queryKey: queryKeys.fleetAppUsers(transporterFilters),
+    queryFn: () => listAppUsers(transporterFilters),
+    enabled: !!user,
   });
 
-  const fleetVendorsQuery = useQuery({
-    queryKey: queryKeys.fleetVendors({
-      search,
-      vendorKind,
-      vehicleType: vendorVehicleType,
-    }),
-    queryFn: () =>
-      listFleetVendors({
-        search: search || undefined,
-        vendorKind: vendorKind === "vendor" || vendorKind === "owner_driver" ? vendorKind : undefined,
-        vehicleType: vendorVehicleType !== "all" ? vendorVehicleType : undefined,
-        limit: 300,
-      }),
-    enabled: !!user && activeTab === "vendors",
+  const driverCount = driversQuery.data?.total ?? 0;
+  const transporterCount = transportersQuery.data?.total ?? 0;
+  const drivers = driversQuery.data?.items ?? [];
+  const transporters = transportersQuery.data?.items ?? [];
+
+  const driverTable = useReactTable({
+    data: drivers,
+    columns: driverColumns,
+    getCoreRowModel: getCoreRowModel(),
   });
 
-  const leasedQuery = useQuery({
-    queryKey: queryKeys.leasedVehicles({ search: search || undefined }),
-    queryFn: () => listLeasedVehicles({ search: search || undefined, limit: 200 }),
-    enabled: !!user && activeTab === "leased_vehicles",
+  const transporterTable = useReactTable({
+    data: transporters,
+    columns: transporterColumns,
+    getCoreRowModel: getCoreRowModel(),
   });
-
-  const allVehicles = fleetVehiclesQuery.data ?? [];
-  const vendors = fleetVendorsQuery.data ?? [];
-  const leasedVehicles = leasedQuery.data ?? [];
-
-  const allVehicleTypeOptions = Array.from(
-    new Set([...masterTypes, ...allVehicles.map((vehicle) => vehicle.type)].filter(Boolean)),
-  );
-
-  const searchPlaceholder =
-    activeTab === "vendors" ? "Search vendors..." : "Search vehicle number, type, vendor...";
-
-  const getOwnershipMeta = (vehicle: { ownershipType: "leased" | "vendor"; isOwnerDriver: boolean }) => {
-    if (vehicle.ownershipType === "leased") {
-      return { label: "Leased", color: OWNERSHIP_COLORS.leased };
-    }
-    if (vehicle.isOwnerDriver) {
-      return { label: "Owner Driver", color: OWNERSHIP_COLORS.owner_driver };
-    }
-    return { label: "Vendor", color: OWNERSHIP_COLORS.vendor };
-  };
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <PageHeader title="Fleet" description="Vehicles, vendors and leased fleet overview" />
+      <PageHeader title="Fleet" description="Partner app drivers and transporters" />
 
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                <UserRound className="h-4 w-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-gray-900">{driverCount}</p>
+                <p className="text-xs text-gray-500">Individual Drivers</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-50">
+                <Building2 className="h-4 w-4 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-gray-900">{transporterCount}</p>
+                <p className="text-xs text-gray-500">Transporters</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search */}
       <div className="relative max-w-md">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
         <Input
-          placeholder={searchPlaceholder}
+          placeholder="Search by name, phone..."
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           className="h-8 pl-8 text-sm"
           maxLength={FIELD_LIMITS.search}
         />
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as FleetTab)}>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FleetTab)}>
         <TabsList className="bg-gray-100 h-8">
-          <TabsTrigger value="all_vehicles" className="text-xs h-7 data-[state=active]:bg-white">
-            All Vehicles
+          <TabsTrigger value="drivers" className="text-xs h-7 data-[state=active]:bg-white">
+            Drivers
           </TabsTrigger>
-          <TabsTrigger value="vendors" className="text-xs h-7 data-[state=active]:bg-white">
-            Vendors
-          </TabsTrigger>
-          <TabsTrigger value="leased_vehicles" className="text-xs h-7 data-[state=active]:bg-white">
-            Leased Vehicles
+          <TabsTrigger value="transporters" className="text-xs h-7 data-[state=active]:bg-white">
+            Transporters
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all_vehicles" className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={allVehicleType} onValueChange={setAllVehicleType}>
-              <SelectTrigger className="h-8 w-[180px] text-xs">
-                <SelectValue placeholder="Vehicle Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Vehicle Types</SelectItem>
-                {allVehicleTypeOptions.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={allOwnershipKind} onValueChange={setAllOwnershipKind}>
-              <SelectTrigger className="h-8 w-[180px] text-xs">
-                <SelectValue placeholder="Ownership" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Ownership</SelectItem>
-                <SelectItem value="leased">Leased</SelectItem>
-                <SelectItem value="vendor">Vendor</SelectItem>
-                <SelectItem value="owner_driver">Owner Driver</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {fleetVehiclesQuery.isLoading && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-gray-500">Loading vehicles...</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!fleetVehiclesQuery.isLoading && fleetVehiclesQuery.isError && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-red-600">
-                  {fleetVehiclesQuery.error instanceof Error
-                    ? fleetVehiclesQuery.error.message
-                    : "Unable to fetch vehicles"}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!fleetVehiclesQuery.isLoading && !fleetVehiclesQuery.isError && allVehicles.length === 0 && (
-            <Card>
-              <CardContent className="p-6 text-center">
-                <Truck className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No vehicles found.</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!fleetVehiclesQuery.isLoading && !fleetVehiclesQuery.isError && allVehicles.length > 0 && (
+        {/* Drivers Tab */}
+        <TabsContent value="drivers" className="mt-4 space-y-3">
+          <ListState query={driversQuery} emptyIcon={UserRound} emptyLabel="No drivers found." />
+          {!driversQuery.isLoading && !driversQuery.isError && drivers.length > 0 && (
             <>
+              {/* Desktop table */}
               <div className="hidden sm:block">
                 <Card>
                   <CardContent className="p-0">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-100 bg-gray-50/50">
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Vehicle No.</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Type</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Ownership</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Vendor / Owner</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Status</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Policy</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {allVehicles.map((vehicle) => {
-                          const ownership = getOwnershipMeta(vehicle);
-                          return (
-                          <tr key={vehicle.id} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-gray-900">{vehicle.number}</td>
-                            <td className="px-4 py-3 text-gray-600">{vehicle.type}</td>
-                            <td className="px-4 py-3">
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] border-0 ${ownership.color}`}
-                              >
-                                {ownership.label}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-gray-600">{vehicle.vendorName ?? "-"}</td>
-                            <td className="px-4 py-3">
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] border-0 ${VEHICLE_STATUS_COLORS[vehicle.status]}`}
-                              >
-                                {vehicle.status.replace("_", " ")}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-gray-500">
-                              {vehicle.ownershipType === "leased"
-                                ? vehicle.hasPolicy
-                                  ? "Configured"
-                                  : "Not configured"
-                                : "-"}
-                            </td>
-                          </tr>
-                        )})}
-                      </tbody>
-                    </table>
+                    <DataTable table={driverTable} />
                   </CardContent>
                 </Card>
               </div>
-
+              {/* Mobile cards */}
               <div className="sm:hidden space-y-2">
-                {allVehicles.map((vehicle) => {
-                  const ownership = getOwnershipMeta(vehicle);
-                  return (
-                  <Card key={vehicle.id}>
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{vehicle.number}</p>
-                          <p className="text-xs text-gray-500">{vehicle.type}</p>
-                          <p className="text-[11px] text-gray-400">{vehicle.vendorName ?? "No vendor assigned"}</p>
+                {drivers.map((d) => (
+                  <Link key={d.id} href={`/vendors/user/${d.id}`}>
+                    <Card className="hover:bg-gray-50/50 transition-colors">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{d.fullName}</p>
+                            <p className="text-xs text-gray-500">{d.phone}</p>
+                            {d.city && <p className="text-[11px] text-gray-400">{d.city}</p>}
+                          </div>
+                          <DocsBadge verified={d.documentsVerified} />
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] border-0 ${VEHICLE_STATUS_COLORS[vehicle.status]}`}
-                        >
-                          {vehicle.status.replace("_", " ")}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] border-0 ${ownership.color}`}
-                        >
-                          {ownership.label}
-                        </Badge>
-                        {vehicle.ownershipType === "leased" && (
-                          <span className="text-[11px] text-gray-500">
-                            {vehicle.hasPolicy ? "Policy configured" : "Policy pending"}
-                          </span>
+                        {d.vehicleNumber && (
+                          <p className="text-[11px] text-gray-500 mt-1.5">
+                            <Truck className="h-3 w-3 inline mr-1" />
+                            {d.vehicleNumber} &middot; {d.vehicleType}
+                          </p>
                         )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )})}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
               </div>
             </>
           )}
         </TabsContent>
 
-        <TabsContent value="vendors" className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={vendorKind} onValueChange={setVendorKind}>
-              <SelectTrigger className="h-8 w-[180px] text-xs">
-                <SelectValue placeholder="Vendor Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Vendor Types</SelectItem>
-                <SelectItem value="vendor">Vendors</SelectItem>
-                <SelectItem value="owner_driver">Owner Driver</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={vendorVehicleType} onValueChange={setVendorVehicleType}>
-              <SelectTrigger className="h-8 w-[180px] text-xs">
-                <SelectValue placeholder="Vehicle Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Vehicle Types</SelectItem>
-                {masterTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {fleetVendorsQuery.isLoading && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-gray-500">Loading vendors...</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!fleetVendorsQuery.isLoading && fleetVendorsQuery.isError && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-red-600">
-                  {fleetVendorsQuery.error instanceof Error
-                    ? fleetVendorsQuery.error.message
-                    : "Unable to fetch vendors"}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!fleetVendorsQuery.isLoading && !fleetVendorsQuery.isError && vendors.length === 0 && (
-            <Card>
-              <CardContent className="p-6 text-center">
-                <Building2 className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No vendors found.</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!fleetVendorsQuery.isLoading && !fleetVendorsQuery.isError && vendors.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {vendors.map((vendor) => (
-                <Card key={vendor.id} className="hover:bg-gray-50/50 transition-colors">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100">
-                          <Building2 className="h-4 w-4 text-gray-500" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{vendor.name}</p>
-                          <p className="text-[11px] text-gray-500 flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> {vendor.contactPhone ?? "-"}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant="outline" className={`text-[10px] border-0 ${KYC_COLORS[vendor.kycStatus]}`}>
-                        {vendor.kycStatus}
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-3 gap-2">
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <span>
-                          <Truck className="h-3 w-3 inline mr-1" />
-                          {vendor.vehiclesCount} vehicles
-                        </span>
-                        {!vendor.isOwnerDriver && (
-                          <span>
-                            <UserRound className="h-3 w-3 inline mr-1" />
-                            {vendor.driversCount} drivers
-                          </span>
-                        )}
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] border-0 ${vendor.isOwnerDriver ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-700"}`}
-                      >
-                        {vendor.isOwnerDriver ? "Owner Driver" : "Vendor"}
-                      </Badge>
-                    </div>
-
-                    {vendor.notes && (
-                      <p className="text-[11px] text-gray-400 mt-2 line-clamp-2">{vendor.notes}</p>
-                    )}
-
-                    <div className="mt-3 pt-3 border-t border-gray-100 flex justify-end">
-                      <Button asChild size="sm" variant="outline" className="h-7 text-[11px]">
-                        <Link href={`/vendors/vendor/${vendor.id}`}>Manage</Link>
-                      </Button>
-                    </div>
+        {/* Transporters Tab */}
+        <TabsContent value="transporters" className="mt-4 space-y-3">
+          <ListState query={transportersQuery} emptyIcon={Building2} emptyLabel="No transporters found." />
+          {!transportersQuery.isLoading && !transportersQuery.isError && transporters.length > 0 && (
+            <>
+              {/* Desktop table */}
+              <div className="hidden sm:block">
+                <Card>
+                  <CardContent className="p-0">
+                    <DataTable table={transporterTable} />
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="leased_vehicles" className="mt-4 space-y-3">
-          {canWrite && (
-            <div className="flex justify-end">
-              <Button size="sm" className="h-8 text-xs gap-1.5" asChild>
-                <Link href="/vendors/leased/new">
-                  <Plus className="h-3.5 w-3.5" /> Add Leased Vehicle
-                </Link>
-              </Button>
-            </div>
-          )}
-
-          {leasedQuery.isLoading && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-gray-500">Loading leased vehicles...</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!leasedQuery.isLoading && leasedQuery.isError && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-red-600">
-                  {leasedQuery.error instanceof Error
-                    ? leasedQuery.error.message
-                    : "Unable to fetch leased vehicles"}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!leasedQuery.isLoading && !leasedQuery.isError && leasedVehicles.length === 0 && (
-            <Card>
-              <CardContent className="p-6 text-center">
-                <Truck className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500 mb-3">No leased vehicles found.</p>
-                {canWrite && (
-                  <Button size="sm" className="h-8 text-xs" asChild>
-                    <Link href="/vendors/leased/new">Add your first leased vehicle</Link>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {!leasedQuery.isLoading && !leasedQuery.isError && leasedVehicles.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {leasedVehicles.map((vehicle) => (
-                <Link key={vehicle.id} href={`/vendors/${vehicle.id}`}>
-                  <Card className="hover:bg-gray-50/50 transition-colors cursor-pointer">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-                            <Truck className="h-4 w-4 text-indigo-600" />
-                          </div>
+              </div>
+              {/* Mobile cards */}
+              <div className="sm:hidden space-y-2">
+                {transporters.map((t) => (
+                  <Link key={t.id} href={`/vendors/user/${t.id}`}>
+                    <Card className="hover:bg-gray-50/50 transition-colors">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between">
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{vehicle.number}</p>
-                            <p className="text-[11px] text-gray-500">
-                              {vehicle.type}
-                              {vehicle.vehicleLength ? ` · ${vehicle.vehicleLength}` : ""}
-                              {vehicle.vendorName ? ` · ${vehicle.vendorName}` : ""}
-                            </p>
+                            <p className="text-sm font-medium text-gray-900">{t.accountName ?? t.fullName}</p>
+                            <p className="text-xs text-gray-500">{t.fullName}</p>
+                            <p className="text-[11px] text-gray-400">{t.phone}</p>
+                            {t.city && <p className="text-[11px] text-gray-400">{t.city}</p>}
                           </div>
+                          <DocsBadge verified={t.documentsVerified} />
                         </div>
-                        <Badge variant="outline" className={`text-[10px] border-0 ${VEHICLE_STATUS_COLORS[vehicle.status]}`}>
-                          {vehicle.status.replace("_", " ")}
-                        </Badge>
-                      </div>
-
-                      {vehicle.policyId ? (
-                        <div className="space-y-2 mt-3">
-                          <div className="flex items-center justify-between text-[11px] pt-2 border-t border-gray-100">
-                            <span className="text-gray-400">
-                              DA: ₹{vehicle.driverDaPerDay.toLocaleString("en-IN")}/day
-                            </span>
-                            <span className="text-gray-400">
-                              Rent: ₹{vehicle.vehicleRentPerDay.toLocaleString("en-IN")}/day
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 text-[11px] text-gray-400">
-                            <Gauge className="h-3 w-3" />
-                            <span>
-                              Mileage: {vehicle.mileageMin}-{vehicle.mileageMax} km/l ({vehicle.defaultTerrain})
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 mt-3 text-xs text-amber-600">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          No policy configured
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </>
           )}
         </TabsContent>
       </Tabs>
     </div>
   );
+}
+
+/* ---------- Shared components ---------- */
+
+function DataTable<T>({ table }: { table: ReturnType<typeof useReactTable<T>> }) {
+  return (
+    <Table>
+      <TableHeader>
+        {table.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id} className="border-b border-gray-100 bg-gray-50/50">
+            {headerGroup.headers.map((header) => (
+              <TableHead key={header.id} className="px-4 py-2.5 text-xs font-medium text-gray-500">
+                {header.isPlaceholder
+                  ? null
+                  : flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {table.getRowModel().rows.map((row) => (
+          <TableRow key={row.id} className="hover:bg-gray-50/50 transition-colors border-gray-50">
+            {row.getVisibleCells().map((cell) => (
+              <TableCell key={cell.id} className="px-4 py-3 text-sm">
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function DocsBadge({ verified }: { verified: boolean | null }) {
+  if (verified === true) {
+    return (
+      <Badge variant="outline" className="text-[10px] border-0 bg-emerald-50 text-emerald-700">
+        Verified
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] border-0 bg-amber-50 text-amber-700">
+      Pending
+    </Badge>
+  );
+}
+
+function ListState({
+  query,
+  emptyIcon: Icon,
+  emptyLabel,
+}: {
+  query: { isLoading: boolean; isError: boolean; error: unknown; data?: { items: unknown[] } };
+  emptyIcon: React.ComponentType<{ className?: string }>;
+  emptyLabel: string;
+}) {
+  if (query.isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-sm text-gray-500">Loading...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (query.isError) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-sm text-red-600">
+            {query.error instanceof Error ? query.error.message : "Unable to fetch data"}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (query.data && query.data.items.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <Icon className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">{emptyLabel}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  return null;
 }

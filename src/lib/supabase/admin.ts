@@ -19,4 +19,3 @@ export function getSupabaseAdminClient() {
 
   return adminClient;
 }
-

@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingRpcError } from "@/lib/supabase/rpc";
-import {
-  normalizeVehicleMasterRows,
-  type VehicleMasterRpcRow,
-} from "@/app/api/vehicle-master/_shared";
-
-export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = await getSupabaseServerClient();
@@ -26,23 +20,11 @@ export async function GET() {
 
   if (rpcError) {
     if (isMissingRpcError(rpcError)) {
-      return NextResponse.json(
-        { ok: false, message: "Missing RPC: vehicle_master_list_v1" },
-        { status: 500 },
-      );
+      return NextResponse.json({ ok: false, message: "Missing RPC: vehicle_master_list_v1" }, { status: 500 });
     }
-
-    const status = rpcError.code === "42501" ? 403 : 500;
-    return NextResponse.json(
-      { ok: false, message: rpcError.message ?? "Unable to fetch vehicle master options" },
-      { status },
-    );
+    return NextResponse.json({ ok: false, message: rpcError.message ?? "Unable to fetch vehicle options" }, { status: 500 });
   }
 
-  const rows = Array.isArray(rpcData) ? (rpcData as VehicleMasterRpcRow[]) : [];
-
-  return NextResponse.json({
-    ok: true,
-    data: normalizeVehicleMasterRows(rows),
-  });
+  const result = (rpcData ?? { vehicles: [], segments: [] }) as { vehicles: unknown[]; segments: unknown[] };
+  return NextResponse.json({ ok: true, data: result });
 }

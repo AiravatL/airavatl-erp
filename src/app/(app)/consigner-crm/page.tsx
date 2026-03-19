@@ -48,7 +48,6 @@ export default function ConsignerPipelinePage() {
   const [winConvertForm, setWinConvertForm] = useState({
     creditDays: "30",
     creditLimit: "0",
-    address: "",
     gstin: "",
   });
 
@@ -98,12 +97,11 @@ export default function ConsignerPipelinePage() {
       winAndConvertConsignerLead(leadId, {
         creditDays: Number(winConvertForm.creditDays) || 30,
         creditLimit: Number(winConvertForm.creditLimit) || 0,
-        address: sanitizeSingleLineInput(winConvertForm.address, FIELD_LIMITS.address).trim() || undefined,
         gstin: sanitizeSingleLineInput(winConvertForm.gstin.toUpperCase(), FIELD_LIMITS.gstin).trim() || undefined,
       }),
     onSuccess: async () => {
       setWinConvertLeadId(null);
-      setWinConvertForm({ creditDays: "30", creditLimit: "0", address: "", gstin: "" });
+      setWinConvertForm({ creditDays: "30", creditLimit: "0", gstin: "" });
       await queryClient.invalidateQueries({ queryKey: ["consigner-crm", "leads"] });
     },
     onError: (error) => {
@@ -294,7 +292,7 @@ export default function ConsignerPipelinePage() {
         onOpenChange={(open) => {
           if (!open) {
             setWinConvertLeadId(null);
-            setWinConvertForm({ creditDays: "30", creditLimit: "0", address: "", gstin: "" });
+            setWinConvertForm({ creditDays: "30", creditLimit: "0", gstin: "" });
           }
         }}
       >
@@ -341,20 +339,6 @@ export default function ConsignerPipelinePage() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Address</Label>
-              <Input
-                value={winConvertForm.address}
-                onChange={(e) =>
-                  setWinConvertForm((p) => ({
-                    ...p,
-                    address: sanitizeSingleLineInput(e.target.value, FIELD_LIMITS.address),
-                  }))
-                }
-                className="h-8 text-sm"
-                maxLength={FIELD_LIMITS.address}
-              />
-            </div>
-            <div className="space-y-1">
               <Label className="text-xs">GSTIN</Label>
               <Input
                 value={winConvertForm.gstin}
@@ -380,7 +364,7 @@ export default function ConsignerPipelinePage() {
               size="sm"
               onClick={() => {
                 setWinConvertLeadId(null);
-                setWinConvertForm({ creditDays: "30", creditLimit: "0", address: "", gstin: "" });
+                setWinConvertForm({ creditDays: "30", creditLimit: "0", gstin: "" });
               }}
             >
               Cancel

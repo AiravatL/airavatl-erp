@@ -1,7 +1,7 @@
 export const queryKeys = {
   adminUsers: ["admin-users"] as const,
   adminUser: (userId: string) => ["admin-user", userId] as const,
-  adminVehicleMaster: ["admin-vehicle-master"] as const,
+  adminVehicleMaster: (includeInactive?: boolean) => ["admin-vehicle-master", { includeInactive }] as const,
   vehicleMasterOptions: ["vehicle-master-options"] as const,
   customers: (filters: {
     search?: string;
@@ -9,6 +9,8 @@ export const queryKeys = {
     ownerId?: string;
     creditHealth?: string;
   }) => ["customers", "list", filters] as const,
+  appConsigners: (filters: { search?: string; limit?: number; offset?: number }) =>
+    ["customers", "app-consigners", filters] as const,
   customer: (customerId: string) => ["customers", "detail", customerId] as const,
   customerTrips: (customerId: string, paging?: { limit?: number; offset?: number }) =>
     ["customers", "trips", customerId, paging ?? {}] as const,
@@ -40,42 +42,55 @@ export const queryKeys = {
     ["rate-requests", "list", filters] as const,
   rateRequest: (requestId: string) => ["rate-requests", "detail", requestId] as const,
   rateRequestQuotes: (requestId: string) => ["rate-requests", "quotes", requestId] as const,
-  vehicleCrmLeads: (filters: { view: "board" | "list"; stage?: string; search?: string; vehicleType?: string }) =>
-    ["vehicle-crm", "leads", filters] as const,
-  vehicleCrmLead: (leadId: string) => ["vehicle-crm", "lead", leadId] as const,
-  vehicleCrmLeadActivities: (leadId: string) => ["vehicle-crm", "lead", leadId, "activities"] as const,
+  verificationPending: (filters: { userType?: string; search?: string; limit?: number; offset?: number }) =>
+    ["verification", "pending", filters] as const,
+  verificationDetail: (userId: string) => ["verification", "detail", userId] as const,
+  deliveryRequests: (filters: {
+    search?: string;
+    status?: string;
+    source?: string;
+    limit?: number;
+    offset?: number;
+  }) => ["delivery-requests", "list", filters] as const,
+  deliveryRequest: (requestId: string) =>
+    ["delivery-requests", "detail", requestId] as const,
+  deliveryRequestConsigners: (search?: string) =>
+    ["delivery-requests", "consigners", search ?? ""] as const,
+  platformSetting: (key: string) =>
+    ["platform-settings", key] as const,
+  platformFees: ["platform-fees"] as const,
   consignerCrmLeads: (filters: { view: "board" | "list"; stage?: string; search?: string; priority?: string }) =>
     ["consigner-crm", "leads", filters] as const,
   consignerCrmLead: (leadId: string) => ["consigner-crm", "lead", leadId] as const,
   consignerCrmLeadActivities: (leadId: string) => ["consigner-crm", "lead", leadId, "activities"] as const,
-  leasedVehicles: (filters: { search?: string; status?: string }) =>
-    ["leased-vehicles", "list", filters] as const,
-  leasedVehicle: (id: string) => ["leased-vehicles", "detail", id] as const,
+  fleetAppUsers: (filters: { userType?: string; search?: string; limit?: number; offset?: number }) =>
+    ["fleet", "app-users", filters] as const,
   vendors: (filters: { search?: string }) => ["vendors", "list", filters] as const,
-  trips: (filters: { search?: string; stage?: string }) =>
+  trips: (filters: { search?: string; status?: string; limit?: number; offset?: number }) =>
     ["trips", "list", filters] as const,
-  tripHistory: (filters: { search?: string; fromDate?: string; toDate?: string }) =>
+  tripHistory: (filters: { search?: string; limit?: number; offset?: number }) =>
     ["trips", "history", filters] as const,
   trip: (id: string) => ["trips", "detail", id] as const,
   tripPaymentRequests: (tripId: string) => ["trips", "payment-requests", tripId] as const,
   tripPaymentSummary: (tripId: string) => ["trips", "payment-summary", tripId] as const,
   tripLoadingProofs: (tripId: string) => ["trips", "loading-proofs", tripId] as const,
   tripTimeline: (tripId: string) => ["trips", "timeline", tripId] as const,
+  tripDriverLocation: (tripId: string) => ["trips", "driver-location", tripId] as const,
   paymentsQueue: (filters: { search?: string; status?: string; type?: string }) => ["payments", "queue", filters] as const,
-  reportOverview: (filters: { fromDate?: string; toDate?: string; ownerId?: string; vehicleType?: string }) =>
-    ["reports", "overview", filters] as const,
-  reportTripPnl: (filters: { fromDate?: string; toDate?: string; ownerId?: string; vehicleType?: string }) =>
-    ["reports", "trip-pnl", filters] as const,
-  reportFuelVariance: (filters: { fromDate?: string; toDate?: string; ownerId?: string; vehicleType?: string }) =>
-    ["reports", "fuel-variance", filters] as const,
-  reportExpenseSummary: (filters: { fromDate?: string; toDate?: string; ownerId?: string; vehicleType?: string }) =>
-    ["reports", "expense-summary", filters] as const,
-  reportUtilization: (filters: { fromDate?: string; toDate?: string; ownerId?: string; vehicleType?: string }) =>
-    ["reports", "utilization", filters] as const,
-  reportSalesPerformance: (filters: { fromDate?: string; toDate?: string; ownerId?: string; vehicleType?: string }) =>
-    ["reports", "sales-performance", filters] as const,
-  reportReceivablesAging: (filters: { fromDate?: string; toDate?: string; ownerId?: string; vehicleType?: string }) =>
-    ["reports", "receivables-aging", filters] as const,
+  appOverview: (filters: { from?: string; to?: string }) =>
+    ["reports", "app-overview", filters] as const,
+  appAuctions: (filters: { status?: string; requestType?: string; search?: string; limit?: number; offset?: number }) =>
+    ["reports", "app-auctions", filters] as const,
+  appTrips: (filters: { status?: string; search?: string; limit?: number; offset?: number }) =>
+    ["reports", "app-trips", filters] as const,
+  appPayments: (filters: { status?: string; paymentType?: string; search?: string; limit?: number; offset?: number }) =>
+    ["reports", "app-payments", filters] as const,
+  appPayouts: (filters: { status?: string; limit?: number; offset?: number }) =>
+    ["reports", "app-payouts", filters] as const,
+  appCustomers: (filters: { search?: string; active?: boolean; creditHealth?: string; limit?: number; offset?: number }) =>
+    ["reports", "app-customers", filters] as const,
+  appDriverLocations: (filters: { onlineOnly?: boolean }) =>
+    ["reports", "app-driver-locations", filters] as const,
   tickets: (filters: { search?: string; status?: string; limit?: number; offset?: number }) =>
     ["tickets", "list", filters] as const,
   availableVehicles: (filters: { vehicleType?: string; search?: string }) =>

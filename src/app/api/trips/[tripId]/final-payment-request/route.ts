@@ -48,7 +48,7 @@ export async function POST(
   const actorResult = await requireTripActor();
   if ("error" in actorResult) return actorResult.error;
 
-  if (actorResult.actor.role !== "operations_vehicles" && actorResult.actor.role !== "admin" && actorResult.actor.role !== "super_admin") {
+  if (actorResult.actor.role !== "operations" && actorResult.actor.role !== "admin" && actorResult.actor.role !== "super_admin") {
     return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
   }
 

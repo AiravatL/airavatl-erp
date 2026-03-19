@@ -16,7 +16,7 @@ import { UserUpsertForm, type UserUpsertFormValues } from "@/components/admin/us
 const EMPTY_EDIT_VALUES: UserUpsertFormValues = {
   fullName: "",
   email: "",
-  role: "operations_consigner",
+  role: "operations",
   password: "",
   active: true,
 };

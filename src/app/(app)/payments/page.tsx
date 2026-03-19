@@ -2,12 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +18,8 @@ import {
   type PaymentQueueItem,
 } from "@/lib/api/payments";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
-import { CreditCard, Eye, Loader2, Search, Upload } from "lucide-react";
+import { SignedImagePreview } from "@/components/shared/signed-image-preview";
+import { CreditCard, Loader2, Search, Upload } from "lucide-react";
 import { MarkPaymentPaidDialog } from "./mark-payment-paid-dialog";
 
 type PaymentQueueTab = "pending-payments" | "paid-history";
@@ -45,106 +40,6 @@ function maskAccountNumber(accountNumber: string | null) {
 
 function isActionable(payment: PaymentQueueItem) {
   return payment.status === "pending" || payment.status === "approved";
-}
-
-function objectKeyExtension(objectKey: string): string {
-  const clean = objectKey.split("?")[0] ?? objectKey;
-  const ext = clean.split(".").pop() ?? "";
-  return ext.toLowerCase();
-}
-
-function isPdfObjectKey(objectKey: string): boolean {
-  return objectKeyExtension(objectKey) === "pdf";
-}
-
-function SignedImagePreview({
-  objectKey,
-  label,
-}: {
-  objectKey: string;
-  label: string;
-}) {
-  const [show, setShow] = useState(false);
-
-  const previewQuery = useQuery({
-    queryKey: ["payments", "object-view", objectKey],
-    queryFn: () => getPaymentObjectViewUrl(objectKey),
-    enabled: show,
-    staleTime: 4 * 60_000,
-    gcTime: 15 * 60_000,
-  });
-  const isPdf = isPdfObjectKey(objectKey);
-
-  return (
-    <>
-      <div className="mt-2 flex items-center gap-2">
-        <span className="text-xs text-gray-500">{label}</span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 px-2 text-[11px]"
-          onClick={() => setShow(true)}
-          disabled={previewQuery.isLoading}
-        >
-          {previewQuery.isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
-          <span className="ml-1">View</span>
-        </Button>
-      </div>
-
-      <Dialog open={show} onOpenChange={setShow}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base">{label}</DialogTitle>
-          </DialogHeader>
-
-          {previewQuery.isLoading && (
-            <div className="flex h-56 items-center justify-center text-sm text-gray-500">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading preview...
-            </div>
-          )}
-
-          {previewQuery.isError && (
-            <p className="text-sm text-red-600">
-              {previewQuery.error instanceof Error
-                ? previewQuery.error.message
-                : "Unable to load preview"}
-            </p>
-          )}
-
-          {previewQuery.data?.viewUrl && !isPdf && (
-            <div className="max-h-[70vh] overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={previewQuery.data.viewUrl}
-                alt={label}
-                className="mx-auto h-auto max-h-[64vh] w-auto rounded"
-              />
-            </div>
-          )}
-
-          {previewQuery.data?.viewUrl && isPdf && (
-            <div className="space-y-2">
-              <div className="h-[68vh] overflow-hidden rounded-md border border-gray-200 bg-gray-50">
-                <iframe
-                  src={previewQuery.data.viewUrl}
-                  title={label}
-                  className="h-full w-full"
-                />
-              </div>
-              <div className="flex justify-end">
-                <Button asChild size="sm" variant="outline" className="h-8 text-xs">
-                  <a href={previewQuery.data.viewUrl} target="_blank" rel="noreferrer">
-                    Open in new tab
-                  </a>
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
 }
 
 function QueueCard({

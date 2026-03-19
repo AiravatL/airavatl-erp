@@ -35,8 +35,8 @@ import {
 } from "lucide-react";
 
 const VEHICLE_TYPES = ["All", "32ft MXL", "20ft SXL", "40ft Trailer"];
-const EDIT_ROLES: Role[] = ["sales_vehicles", "operations_vehicles", "admin", "super_admin"];
-const REQUEST_RATE_ROLES: Role[] = ["sales_consigner", "operations_consigner", "admin", "super_admin"];
+const EDIT_ROLES: Role[] = ["sales_vehicles", "operations", "admin", "super_admin"];
+const REQUEST_RATE_ROLES: Role[] = ["sales_consigner", "operations", "admin", "super_admin"];
 const COLLAPSED_COMMENT_COUNT = 2;
 const RATE_COMMENT_MAX_LENGTH = 500;
 

@@ -8,8 +8,7 @@ export const dynamic = "force-dynamic";
 const TICKET_ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
-  "operations_consigner",
-  "operations_vehicles",
+  "operations",
   "sales_vehicles",
   "sales_consigner",
   "accounts",

@@ -27,7 +27,7 @@ import {
 import { listVehicleMasterOptions } from "@/lib/api/vehicle-master";
 import { queryKeys } from "@/lib/query/keys";
 
-const WRITE_ROLES = ["super_admin", "admin", "operations_vehicles"];
+const WRITE_ROLES = ["super_admin", "admin", "operations"];
 
 const STATUS_COLORS: Record<string, string> = {
   available: "bg-emerald-50 text-emerald-700",

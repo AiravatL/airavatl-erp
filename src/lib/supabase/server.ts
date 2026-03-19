@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 export async function getSupabaseServerClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(
+  const client = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -25,4 +25,16 @@ export async function getSupabaseServerClient() {
       },
     },
   );
+
+  // Proxy: intercept .rpc() calls to route them through the erp schema,
+  // while keeping .from(), .auth, .storage etc. on the default public schema.
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === "rpc") {
+        return (...args: Parameters<typeof target.rpc>) =>
+          target.schema("erp").rpc(...args);
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 }

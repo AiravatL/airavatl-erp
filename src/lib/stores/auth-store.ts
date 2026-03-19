@@ -13,16 +13,14 @@ interface AuthState {
     password: string
   ) => Promise<{ ok: boolean; message?: string }>;
   logout: () => Promise<void>;
-  /** Call once on mount; returns an unsubscribe/cleanup function. */
   _initSession: () => () => void;
 }
 
 let _loginInProgress = false;
 let _initialSessionChecked = false;
-let _sessionInitInFlight: Promise<void> | null = null;
 let _profileInFlight: Promise<User | null> | null = null;
 let _profileCache: { value: User | null; at: number } | null = null;
-const PROFILE_CACHE_TTL_MS = 5_000;
+const PROFILE_CACHE_TTL_MS = 30_000;
 
 function clearProfileCache() {
   _profileInFlight = null;
@@ -85,41 +83,40 @@ export const useAuthStore = create<AuthState>()((set) => ({
         return;
       }
 
-      if (!_sessionInitInFlight) {
-        _sessionInitInFlight = (async () => {
-          try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-
-            if (!session?.user) {
-              if (isMounted) set({ user: null, isAuthenticated: false });
-              return;
-            }
-
-            const profile = await fetchProfile();
-
-            if (!profile || !profile.active) {
-              await supabase.auth.signOut();
-              clearProfileCache();
-              if (isMounted) set({ user: null, isAuthenticated: false });
-              return;
-            }
-
-            if (isMounted) set({ user: profile, isAuthenticated: true });
-          } catch {
-            if (isMounted) set({ user: null, isAuthenticated: false });
-          } finally {
-            _initialSessionChecked = true;
-            _sessionInitInFlight = null;
-          }
-        })();
-      }
-
       try {
-        await _sessionInitInFlight;
-      } finally {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          if (isMounted) set({ user: null, isAuthenticated: false });
+          stopLoading();
+          return;
+        }
+
+        // Session exists in cookies — immediately mark as authenticated
+        // so the user sees the current page, not a redirect
+        if (isMounted) set({ isAuthenticated: true, isLoading: false });
         stopLoading();
+
+        // Fetch full profile in background (for role, name, etc.)
+        const profile = await fetchProfile();
+
+        if (!profile || !profile.active) {
+          // Profile fetch failed or user inactive — sign out
+          await supabase.auth.signOut();
+          clearProfileCache();
+          if (isMounted) set({ user: null, isAuthenticated: false });
+          return;
+        }
+
+        if (isMounted) set({ user: profile, isAuthenticated: true });
+      } catch {
+        // If session check itself failed, don't redirect —
+        // middleware already validated cookies
+        if (isMounted) set({ isLoading: false });
+      } finally {
+        _initialSessionChecked = true;
       }
     }
 
@@ -133,15 +130,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
           if (!isMounted) return;
 
           if (event === "INITIAL_SESSION") {
-            // `getSession()` bootstrap above handles initial hydrate path.
-            stopLoading();
+            // initSession() handles this path
             return;
           }
 
           if (event === "SIGNED_OUT") {
             clearProfileCache();
-            set({ user: null, isAuthenticated: false });
-            stopLoading();
+            set({ user: null, isAuthenticated: false, isLoading: false });
             return;
           }
 
@@ -154,32 +149,27 @@ export const useAuthStore = create<AuthState>()((set) => ({
               currentState.user?.id === session.user.id &&
               isProfileCacheFresh()
             ) {
-              stopLoading();
               return;
             }
           }
 
           if (session?.user) {
+            // Mark authenticated immediately, fetch profile in background
+            if (isMounted) set({ isAuthenticated: true, isLoading: false });
+
             const profile = await fetchProfile();
             if (!profile || !profile.active) {
               await supabase.auth.signOut();
               clearProfileCache();
-              if (isMounted) {
-                set({ user: null, isAuthenticated: false });
-                stopLoading();
-              }
+              if (isMounted) set({ user: null, isAuthenticated: false });
               return;
             }
 
-            if (isMounted) {
-              set({ user: profile, isAuthenticated: true });
-              stopLoading();
-            }
+            if (isMounted) set({ user: profile, isAuthenticated: true });
             return;
           }
 
-          set({ user: null, isAuthenticated: false });
-          stopLoading();
+          set({ user: null, isAuthenticated: false, isLoading: false });
         })();
       }
     );

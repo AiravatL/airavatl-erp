@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "objectKey is required" }, { status: 400 });
   }
 
-  const workerConfig = getR2WorkerConfig();
+  const workerConfig = await getR2WorkerConfig();
   const { data: sessionData } = await actorResult.supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token ?? null;
 
@@ -54,16 +54,17 @@ export async function POST(request: Request) {
   }
 
   const payload = (await response.json().catch(() => null)) as WorkerPresignGetResponse | null;
-  if (!response.ok || !payload?.view_url) {
+  const viewUrl = payload?.view_url ?? payload?.download_url ?? null;
+  if (!response.ok || !viewUrl) {
     return NextResponse.json({ ok: false, message: payload?.error || "Unable to generate file view URL" }, { status: 502 });
   }
 
-  const expiresIn = typeof payload.expires_in === "number" ? payload.expires_in : null;
+  const expiresIn = typeof payload?.expires_in === "number" ? payload.expires_in : null;
 
   return NextResponse.json({
     ok: true,
     data: {
-      viewUrl: payload.view_url,
+      viewUrl,
       expiresIn,
     },
   });

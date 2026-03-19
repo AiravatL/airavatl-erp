@@ -13,19 +13,18 @@ const TABS = [
     roles: [
       "super_admin",
       "admin",
-      "operations_consigner",
+      "operations",
       "sales_consigner",
-      "operations_vehicles",
       "sales_vehicles",
     ] as const,
   },
   {
     label: "Request Rate",
     href: "/rates/request",
-    roles: ["super_admin", "admin", "operations_consigner", "sales_consigner"] as const,
+    roles: ["super_admin", "admin", "operations", "sales_consigner"] as const,
   },
-  { label: "Rate Review", href: "/rates/review", roles: ["super_admin", "admin", "operations_vehicles", "sales_vehicles"] as const },
-  { label: "Submit Rate", href: "/rates/submit", roles: ["operations_vehicles", "sales_vehicles", "super_admin", "admin"] as const },
+  { label: "Rate Review", href: "/rates/review", roles: ["super_admin", "admin", "operations", "sales_vehicles"] as const },
+  { label: "Submit Rate", href: "/rates/submit", roles: ["operations", "sales_vehicles", "super_admin", "admin"] as const },
 ];
 
 export default function RatesLayout({ children }: { children: React.ReactNode }) {

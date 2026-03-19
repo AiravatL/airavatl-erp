@@ -87,6 +87,50 @@ export async function listCustomers(filters: ListCustomersFilters = {}): Promise
   );
 }
 
+export interface AppConsigner {
+  consignerId: string;
+  fullName: string;
+  businessName: string;
+  phone: string;
+  email: string | null;
+  city: string | null;
+  state: string | null;
+  accountType: string;
+  isVerified: boolean;
+  totalTrips: number;
+  activeTrips: number;
+  createdAt: string;
+}
+
+export interface AppConsignerListResponse {
+  total: number;
+  items: AppConsigner[];
+}
+
+export async function listAppConsigners(filters: { search?: string; limit?: number; offset?: number } = {}): Promise<AppConsignerListResponse> {
+  const raw = await apiRequest<{ total: number; items: Record<string, unknown>[] }>(
+    `/api/customers/app-consigners${buildQuery(filters)}`,
+    { method: "GET", cache: "no-store" },
+  );
+  return {
+    total: raw.total,
+    items: raw.items.map((r) => ({
+      consignerId: String(r.consigner_id ?? ""),
+      fullName: String(r.full_name ?? ""),
+      businessName: String(r.business_name ?? ""),
+      phone: String(r.phone ?? ""),
+      email: r.email ? String(r.email) : null,
+      city: r.city ? String(r.city) : null,
+      state: r.state ? String(r.state) : null,
+      accountType: String(r.account_type ?? "individual"),
+      isVerified: Boolean(r.is_verified),
+      totalTrips: Number(r.total_trips ?? 0),
+      activeTrips: Number(r.active_trips ?? 0),
+      createdAt: String(r.created_at ?? ""),
+    })),
+  };
+}
+
 export async function getCustomerById(customerId: string): Promise<CustomerDetail> {
   return apiRequest<CustomerDetail>(`/api/customers/${customerId}`, {
     method: "GET",

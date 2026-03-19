@@ -25,13 +25,20 @@ import {
 } from "@/lib/validation/client/sanitizers";
 import { isValidEmail, sanitizeDecimalInput, sanitizePhoneInput } from "@/lib/validation/client/validators";
 import { Save, X, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const FALLBACK_VEHICLE_TYPES = ["32ft MXL", "20ft SXL", "40ft Trailer"];
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function fieldError(value: string, touched: boolean, validate: () => string | null): string | null {
+  if (!touched) return null;
+  return validate();
+}
 
 export default function AddLeadPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState({
     companyName: "",
     companyAddress: "",
@@ -49,44 +56,56 @@ export default function AddLeadPage() {
     nextFollowUp: "",
   });
 
+  const markTouched = (field: string) => setTouched((p) => ({ ...p, [field]: true }));
+  const markAllTouched = () => {
+    const all: Record<string, boolean> = {};
+    for (const key of Object.keys(form)) all[key] = true;
+    setTouched(all);
+  };
+
   const updateField = (field: string, value: string) => {
     const nextValue = (() => {
       switch (field) {
-        case "companyName":
-          return sanitizeSingleLineInput(value, FIELD_LIMITS.companyName);
+        case "companyName": return sanitizeSingleLineInput(value, FIELD_LIMITS.companyName);
         case "contactPerson":
-        case "contactPersonDesignation":
-          return sanitizeSingleLineInput(value, FIELD_LIMITS.fullName);
-        case "companyAddress":
-          return sanitizeSingleLineInput(value, FIELD_LIMITS.address);
-        case "natureOfBusiness":
-          return sanitizeSingleLineInput(value, FIELD_LIMITS.companyName);
-        case "phone":
-        case "nextFollowUp":
-          return field === "phone" ? sanitizePhoneInput(value, FIELD_LIMITS.phoneDigits) : value;
-        case "email":
-          return sanitizeSingleLineInput(value, FIELD_LIMITS.email).toLowerCase();
-        case "estimatedValue":
-          return sanitizeDecimalInput(value, {
-            maxIntegerDigits: FIELD_LIMITS.currencyDigits,
-            maxFractionDigits: 2,
-          });
-        case "route":
-          return sanitizeSingleLineInput(value, FIELD_LIMITS.location);
-        case "notes":
-          return sanitizeMultilineInput(value, FIELD_LIMITS.notes);
-        default:
-          return value;
+        case "contactPersonDesignation": return sanitizeSingleLineInput(value, FIELD_LIMITS.fullName);
+        case "companyAddress": return sanitizeSingleLineInput(value, FIELD_LIMITS.address);
+        case "natureOfBusiness": return sanitizeSingleLineInput(value, FIELD_LIMITS.companyName);
+        case "phone": return sanitizePhoneInput(value, FIELD_LIMITS.phoneDigits);
+        case "email": return sanitizeSingleLineInput(value, FIELD_LIMITS.email).toLowerCase();
+        case "estimatedValue": return sanitizeDecimalInput(value, { maxIntegerDigits: FIELD_LIMITS.currencyDigits, maxFractionDigits: 2 });
+        case "route": return sanitizeSingleLineInput(value, FIELD_LIMITS.location);
+        case "notes": return sanitizeMultilineInput(value, FIELD_LIMITS.notes);
+        default: return value;
       }
     })();
-
     setForm((prev) => ({ ...prev, [field]: nextValue }));
   };
 
+  // Validation helpers
+  const phoneDigits = form.phone.replace(/\D/g, "");
+  const errors = {
+    companyName: fieldError(form.companyName, !!touched.companyName, () =>
+      !form.companyName.trim() ? "Company name is required" : form.companyName.trim().length < 2 ? "Too short" : null,
+    ),
+    contactPerson: fieldError(form.contactPerson, !!touched.contactPerson, () =>
+      !form.contactPerson.trim() ? "Contact person is required" : form.contactPerson.trim().length < 2 ? "Too short" : null,
+    ),
+    phone: fieldError(form.phone, !!touched.phone, () =>
+      !form.phone.trim() ? "Phone is required" : phoneDigits.length < 10 ? "At least 10 digits required" : !/^[6-9]/.test(phoneDigits) ? "Must start with 6-9" : null,
+    ),
+    email: fieldError(form.email, !!touched.email, () =>
+      form.email && !EMAIL_REGEX.test(form.email) ? "Invalid email address" : null,
+    ),
+    source: fieldError(form.source, !!touched.source, () =>
+      !form.source ? "Source is required" : null,
+    ),
+  };
+
   const isValid =
-    normalizeSingleLineForSubmit(form.companyName, FIELD_LIMITS.companyName) &&
-    normalizeSingleLineForSubmit(form.contactPerson, FIELD_LIMITS.fullName) &&
-    form.phone.replace(/\D/g, "").length >= 10 &&
+    normalizeSingleLineForSubmit(form.companyName, FIELD_LIMITS.companyName).length >= 2 &&
+    normalizeSingleLineForSubmit(form.contactPerson, FIELD_LIMITS.fullName).length >= 2 &&
+    phoneDigits.length >= 10 &&
     form.source &&
     (!form.email || isValidEmail(normalizeSingleLineForSubmit(form.email, FIELD_LIMITS.email)));
 
@@ -96,10 +115,9 @@ export default function AddLeadPage() {
   });
 
   const vehicleMaster = vehicleMasterQuery.data ?? [];
-  const hasMasterOptions = vehicleMaster.length > 0;
-  const vehicleTypeOptions = hasMasterOptions
+  const vehicleTypeOptions = vehicleMaster.length > 0
     ? Array.from(new Set(vehicleMaster.map((type) => type.name).filter(Boolean)))
-    : FALLBACK_VEHICLE_TYPES;
+    : [];
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -107,8 +125,7 @@ export default function AddLeadPage() {
         companyName: normalizeSingleLineForSubmit(form.companyName, FIELD_LIMITS.companyName),
         companyAddress: normalizeSingleLineForSubmit(form.companyAddress, FIELD_LIMITS.address) || undefined,
         contactPerson: normalizeSingleLineForSubmit(form.contactPerson, FIELD_LIMITS.fullName),
-        contactPersonDesignation:
-          normalizeSingleLineForSubmit(form.contactPersonDesignation, FIELD_LIMITS.fullName) || undefined,
+        contactPersonDesignation: normalizeSingleLineForSubmit(form.contactPersonDesignation, FIELD_LIMITS.fullName) || undefined,
         natureOfBusiness: normalizeSingleLineForSubmit(form.natureOfBusiness, FIELD_LIMITS.companyName) || undefined,
         phone: form.phone.trim(),
         email: normalizeSingleLineForSubmit(form.email, FIELD_LIMITS.email) || undefined,
@@ -130,6 +147,7 @@ export default function AddLeadPage() {
   });
 
   const handleSubmit = () => {
+    markAllTouched();
     if (!isValid) return;
     setError("");
     createMutation.mutate();
@@ -137,10 +155,7 @@ export default function AddLeadPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Add New Lead"
-        description="Create a new consigner lead to track in your pipeline"
-      />
+      <PageHeader title="Add New Lead" description="Create a new consigner lead to track in your pipeline" />
 
       <Card>
         <CardContent className="p-4 sm:p-6">
@@ -153,117 +168,97 @@ export default function AddLeadPage() {
 
             {/* Company + Contact */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="companyName" className="text-sm font-medium">
-                  Company Name <span className="text-red-500">*</span>
-                </Label>
+              <FieldWrapper label="Company Name" required error={errors.companyName}>
                 <Input
-                  id="companyName"
                   placeholder="e.g. Tata Steel Ltd"
                   value={form.companyName}
                   onChange={(e) => updateField("companyName", e.target.value)}
-                  className="h-9 text-sm"
+                  onBlur={() => markTouched("companyName")}
+                  className={cn("h-9 text-sm", errors.companyName && "border-red-400 focus-visible:ring-red-400")}
                   maxLength={FIELD_LIMITS.companyName}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="contactPerson" className="text-sm font-medium">
-                  Contact Person <span className="text-red-500">*</span>
-                </Label>
+              </FieldWrapper>
+              <FieldWrapper label="Contact Person" required error={errors.contactPerson}>
                 <Input
-                  id="contactPerson"
                   placeholder="e.g. Rajesh Kumar"
                   value={form.contactPerson}
                   onChange={(e) => updateField("contactPerson", e.target.value)}
-                  className="h-9 text-sm"
+                  onBlur={() => markTouched("contactPerson")}
+                  className={cn("h-9 text-sm", errors.contactPerson && "border-red-400 focus-visible:ring-red-400")}
                   maxLength={FIELD_LIMITS.fullName}
                 />
-              </div>
+              </FieldWrapper>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="companyAddress" className="text-sm font-medium">Company Address</Label>
+              <FieldWrapper label="Company Address">
                 <Input
-                  id="companyAddress"
                   placeholder="e.g. GIDC, Vapi, Gujarat"
                   value={form.companyAddress}
                   onChange={(e) => updateField("companyAddress", e.target.value)}
                   className="h-9 text-sm"
                   maxLength={FIELD_LIMITS.address}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="contactPersonDesignation" className="text-sm font-medium">
-                  Contact Person Designation
-                </Label>
+              </FieldWrapper>
+              <FieldWrapper label="Contact Person Designation">
                 <Input
-                  id="contactPersonDesignation"
                   placeholder="e.g. Procurement Manager"
                   value={form.contactPersonDesignation}
                   onChange={(e) => updateField("contactPersonDesignation", e.target.value)}
                   className="h-9 text-sm"
                   maxLength={FIELD_LIMITS.fullName}
                 />
-              </div>
+              </FieldWrapper>
             </div>
 
             {/* Phone + Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="phone" className="text-sm font-medium">
-                  Phone <span className="text-red-500">*</span>
-                </Label>
+              <FieldWrapper label="Phone" required error={errors.phone}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-gray-500 shrink-0">+91</span>
+                  <Input
+                    placeholder="9876543210"
+                    value={form.phone}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    onBlur={() => markTouched("phone")}
+                    className={cn("h-9 text-sm", errors.phone && "border-red-400 focus-visible:ring-red-400")}
+                    inputMode="tel"
+                    maxLength={10}
+                  />
+                </div>
+              </FieldWrapper>
+              <FieldWrapper label="Email" error={errors.email}>
                 <Input
-                  id="phone"
-                  placeholder="e.g. +91 98765 43210"
-                  value={form.phone}
-                  onChange={(e) => updateField("phone", e.target.value)}
-                  className="h-9 text-sm"
-                  inputMode="tel"
-                  maxLength={FIELD_LIMITS.phoneDigits + 1}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-sm font-medium">
-                  Email
-                </Label>
-                <Input
-                  id="email"
                   type="email"
                   placeholder="e.g. contact@company.com"
                   value={form.email}
                   onChange={(e) => updateField("email", e.target.value)}
-                  className="h-9 text-sm"
+                  onBlur={() => markTouched("email")}
+                  className={cn("h-9 text-sm", errors.email && "border-red-400 focus-visible:ring-red-400")}
                   autoCapitalize="none"
                   spellCheck={false}
                   maxLength={FIELD_LIMITS.email}
                 />
-              </div>
+              </FieldWrapper>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="natureOfBusiness" className="text-sm font-medium">Nature Of Business</Label>
+              <FieldWrapper label="Nature Of Business">
                 <Input
-                  id="natureOfBusiness"
                   placeholder="e.g. Steel Manufacturing"
                   value={form.natureOfBusiness}
                   onChange={(e) => updateField("natureOfBusiness", e.target.value)}
                   className="h-9 text-sm"
                   maxLength={FIELD_LIMITS.companyName}
                 />
-              </div>
+              </FieldWrapper>
             </div>
 
             {/* Source + Priority */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium">
-                  Source <span className="text-red-500">*</span>
-                </Label>
-                <Select value={form.source} onValueChange={(v) => updateField("source", v)}>
-                  <SelectTrigger className="w-full h-9 text-sm">
+              <FieldWrapper label="Source" required error={errors.source}>
+                <Select value={form.source} onValueChange={(v) => { updateField("source", v); markTouched("source"); }}>
+                  <SelectTrigger className={cn("w-full h-9 text-sm", errors.source && "border-red-400")}>
                     <SelectValue placeholder="Select source" />
                   </SelectTrigger>
                   <SelectContent>
@@ -272,9 +267,8 @@ export default function AddLeadPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Priority</Label>
+              </FieldWrapper>
+              <FieldWrapper label="Priority">
                 <Select value={form.priority} onValueChange={(v) => updateField("priority", v)}>
                   <SelectTrigger className="w-full h-9 text-sm">
                     <SelectValue placeholder="Select priority" />
@@ -285,17 +279,13 @@ export default function AddLeadPage() {
                     <SelectItem value="low">Low</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </FieldWrapper>
             </div>
 
             {/* Value + Route */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="estimatedValue" className="text-sm font-medium">
-                  Estimated Value (₹)
-                </Label>
+              <FieldWrapper label="Estimated Value (₹)">
                 <Input
-                  id="estimatedValue"
                   type="text"
                   inputMode="decimal"
                   placeholder="e.g. 150000"
@@ -303,73 +293,65 @@ export default function AddLeadPage() {
                   onChange={(e) => updateField("estimatedValue", e.target.value)}
                   className="h-9 text-sm"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="route" className="text-sm font-medium">
-                  Route
-                </Label>
+              </FieldWrapper>
+              <FieldWrapper label="Route">
                 <Input
-                  id="route"
                   placeholder="e.g. Mumbai - Delhi"
                   value={form.route}
                   onChange={(e) => updateField("route", e.target.value)}
                   className="h-9 text-sm"
                   maxLength={FIELD_LIMITS.location}
                 />
-              </div>
+              </FieldWrapper>
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm font-medium">Vehicle Requirement (Multi Select)</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-md border border-gray-200 p-3">
-                {vehicleTypeOptions.map((vehicleType) => {
-                  const checked = form.vehicleRequirements.includes(vehicleType);
-                  return (
-                    <label key={vehicleType} className="flex items-center gap-2 text-sm text-gray-700">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(value) => {
-                          setForm((prev) => ({
-                            ...prev,
-                            vehicleRequirements: value
-                              ? prev.vehicleRequirements.includes(vehicleType)
-                                ? prev.vehicleRequirements
-                                : [...prev.vehicleRequirements, vehicleType]
-                              : prev.vehicleRequirements.filter((item) => item !== vehicleType),
-                          }));
-                        }}
-                      />
-                      <span>{vehicleType}</span>
-                    </label>
-                  );
-                })}
-              </div>
-              {vehicleMasterQuery.isError && (
-                <p className="text-[11px] text-amber-600">Using fallback vehicle types</p>
+              {vehicleTypeOptions.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 rounded-md border border-gray-200 p-3">
+                  {vehicleTypeOptions.map((vehicleType) => {
+                    const checked = form.vehicleRequirements.includes(vehicleType);
+                    return (
+                      <label key={vehicleType} className="flex items-center gap-2 text-sm text-gray-700">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              vehicleRequirements: value
+                                ? [...prev.vehicleRequirements, vehicleType]
+                                : prev.vehicleRequirements.filter((item) => item !== vehicleType),
+                            }));
+                          }}
+                        />
+                        <span>{vehicleType}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 rounded-md border border-dashed border-gray-200 p-3">
+                  {vehicleMasterQuery.isLoading ? "Loading vehicles..." : "No vehicles in master. Add them in Administration > Vehicle Master."}
+                </p>
               )}
             </div>
 
             {/* Next Follow-up */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="nextFollowUp" className="text-sm font-medium">
-                  Next Follow-up Date
-                </Label>
+              <FieldWrapper label="Next Follow-up Date">
                 <Input
-                  id="nextFollowUp"
                   type="date"
                   value={form.nextFollowUp}
                   onChange={(e) => updateField("nextFollowUp", e.target.value)}
                   className="h-9 text-sm"
                 />
-              </div>
+              </FieldWrapper>
             </div>
 
             {/* Notes */}
             <div className="space-y-1.5">
-              <Label htmlFor="notes" className="text-sm font-medium">Notes</Label>
+              <Label className="text-sm font-medium">Notes</Label>
               <Textarea
-                id="notes"
                 placeholder="Any additional notes about this lead..."
                 value={form.notes}
                 onChange={(e) => updateField("notes", e.target.value)}
@@ -382,31 +364,34 @@ export default function AddLeadPage() {
 
             {/* Actions */}
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => router.push("/consigner-crm")}
-                className="h-9 text-sm"
-                disabled={createMutation.isPending}
-              >
-                <X className="h-4 w-4 mr-1.5" />
-                Cancel
+              <Button variant="outline" onClick={() => router.push("/consigner-crm")} className="h-9 text-sm" disabled={createMutation.isPending}>
+                <X className="h-4 w-4 mr-1.5" /> Cancel
               </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={!isValid || createMutation.isPending}
-                className="h-9 text-sm"
-              >
-                {createMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-1.5" />
-                )}
+              <Button onClick={handleSubmit} disabled={createMutation.isPending} className="h-9 text-sm">
+                {createMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
                 Save Lead
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function FieldWrapper({ label, required, error, children }: {
+  label: string;
+  required?: boolean;
+  error?: string | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm font-medium">
+        {label} {required && <span className="text-red-500">*</span>}
+      </Label>
+      {children}
+      {error && <p className="text-[11px] text-red-500">{error}</p>}
     </div>
   );
 }

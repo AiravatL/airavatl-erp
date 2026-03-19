@@ -215,6 +215,127 @@ export interface TripPaymentSummary {
   isTripCompleted: boolean;
 }
 
+// -- Auction Trip types (new auction-flow) --
+
+export interface AuctionTripListItem {
+  trip_id: string;
+  trip_number: string;
+  status: string;
+  request_number: string;
+  pickup_city: string;
+  pickup_state: string | null;
+  delivery_city: string;
+  delivery_state: string | null;
+  pickup_formatted_address: string;
+  delivery_formatted_address: string;
+  vehicle_type: string;
+  consignment_date: string;
+  driver_name: string;
+  driver_type: string;
+  bid_amount: number;
+  consigner_trip_amount: number | null;
+  source: "erp" | "app";
+  pickup_otp: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuctionTripListResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  items: AuctionTripListItem[];
+}
+
+export interface AuctionTripDetail {
+  trip: Record<string, unknown>;
+  bid: Record<string, unknown>;
+  erp_metadata: {
+    consigner_trip_amount: number;
+    selected_by_admin_id: string;
+    selected_by_name: string | null;
+  } | null;
+  request_metadata: {
+    created_by_name: string;
+    consigner_profile_name: string | null;
+    internal_notes: string | null;
+  } | null;
+  delivery_request_status: string;
+  request_id: string;
+  request_number: string;
+}
+
+export interface ListAuctionTripsFilters {
+  search?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}
+
+function buildAuctionTripQuery(filters: ListAuctionTripsFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.status) params.set("status", filters.status);
+  if (typeof filters.limit === "number") params.set("limit", String(filters.limit));
+  if (typeof filters.offset === "number") params.set("offset", String(filters.offset));
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function listAuctionTrips(
+  filters: ListAuctionTripsFilters = {},
+): Promise<AuctionTripListResponse> {
+  return apiRequest<AuctionTripListResponse>(
+    `/api/trips${buildAuctionTripQuery(filters)}`,
+    { method: "GET", cache: "no-store" },
+  );
+}
+
+export async function getAuctionTrip(tripId: string): Promise<AuctionTripDetail> {
+  return apiRequest<AuctionTripDetail>(`/api/trips/${encodeURIComponent(tripId)}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+}
+
+export async function listAuctionTripHistory(
+  filters: ListAuctionTripsFilters = {},
+): Promise<AuctionTripListResponse> {
+  return apiRequest<AuctionTripListResponse>(
+    `/api/trips/history${buildAuctionTripQuery(filters)}`,
+    { method: "GET", cache: "no-store" },
+  );
+}
+
+// -- Driver location --
+
+export interface DriverLocation {
+  latitude: number;
+  longitude: number;
+  heading: number | null;
+  speedKmph: number | null;
+  updatedAt: string | null;
+}
+
+export interface DriverLocationResponse {
+  location: DriverLocation | null;
+  minutesSinceUpdate: number;
+  isStale: boolean;
+  staleWarning: string | null;
+  etaMinutes: number | null;
+  trackingMode: string;
+  destination: Record<string, unknown> | null;
+}
+
+export async function getDriverLocationForTrip(tripId: string): Promise<DriverLocationResponse> {
+  return apiRequest<DriverLocationResponse>(`/api/trips/${encodeURIComponent(tripId)}/location`, {
+    method: "GET",
+    cache: "no-store",
+  });
+}
+
+// -- Legacy trip helpers (kept for existing features) --
+
 function buildQuery(filters: ListTripsFilters = {}) {
   const params = new URLSearchParams();
   if (filters.search) params.set("search", filters.search);
@@ -237,10 +358,12 @@ function buildHistoryQuery(filters: ListTripHistoryFilters = {}) {
 }
 
 export async function listTrips(filters: ListTripsFilters = {}): Promise<TripListItem[]> {
-  return apiRequest<TripListItem[]>(`/api/trips${buildQuery(filters)}`, {
-    method: "GET",
-    cache: "no-store",
-  });
+  const result = await apiRequest<{ total: number; items: TripListItem[] } | TripListItem[]>(
+    `/api/trips${buildQuery(filters)}`,
+    { method: "GET", cache: "no-store" },
+  );
+  // Handle both paginated { total, items } and flat array responses
+  return Array.isArray(result) ? result : (result.items ?? []);
 }
 
 export async function listTripHistory(filters: ListTripHistoryFilters = {}): Promise<TripListItem[]> {

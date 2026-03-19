@@ -8,7 +8,6 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import {
   LayoutDashboard,
-  Truck,
   Users,
   Building2,
   CreditCard,
@@ -19,10 +18,11 @@ import {
   LogOut,
   BookOpen,
   TrendingUp,
-  ContactRound,
   UserRound,
-  History,
+  PackagePlus,
+  Truck,
   ChevronDown,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
@@ -36,30 +36,30 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Trips", href: "/trips", icon: Truck },
-  { label: "Trip History", href: "/trips/history", icon: History },
+  { label: "Auctions", href: "/delivery-requests", icon: PackagePlus, roles: ["super_admin", "admin", "sales_consigner"] },
+  { label: "Trips", href: "/trips", icon: Truck, roles: ["super_admin", "admin", "sales_consigner", "operations"] },
   { label: "Customers", href: "/customers", icon: Users },
   { label: "Fleet", href: "/vendors", icon: Building2 },
+  { label: "Live Map", href: "/fleet/live-map", icon: MapPin, roles: ["super_admin", "admin", "operations"] },
   { label: "Payments", href: "/payments", icon: CreditCard, roles: ["super_admin", "admin", "accounts"] },
   { label: "Consigner CRM", href: "/consigner-crm", icon: TrendingUp, roles: ["super_admin", "admin", "sales_consigner"] },
-  { label: "Vehicle CRM", href: "/vehicle-crm", icon: ContactRound, roles: ["super_admin", "admin", "sales_vehicles"] },
+  { label: "Partner Verification", href: "/verification", icon: ShieldCheck, roles: ["super_admin", "admin", "sales_vehicles", "operations"] },
   { label: "Receivables", href: "/receivables", icon: Receipt, roles: ["super_admin", "admin", "sales_consigner", "sales_vehicles", "accounts"] },
   { label: "Rate Library", href: "/rates", icon: BookOpen },
   { label: "Tickets", href: "/tickets", icon: TicketCheck },
-  { label: "Reports", href: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "accounts"] },
+  { label: "Reports", href: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "accounts", "operations"] },
   { label: "Administration", href: "/admin/users", icon: ShieldCheck, roles: ["super_admin", "admin"] },
 ];
 
 const REPORT_SUB_ITEMS = [
-  { label: "Trip P&L", href: "/reports/trip-pnl" },
-  { label: "Fuel Variance", href: "/reports/fuel-variance" },
-  { label: "Expense Summary", href: "/reports/expense-summary" },
-  { label: "Utilization", href: "/reports/utilization" },
-  { label: "Sales Performance", href: "/reports/sales-performance" },
-  { label: "Receivables Aging", href: "/reports/receivables-aging" },
+  { label: "Auctions", href: "/reports/auctions" },
+  { label: "Trips", href: "/reports/trips" },
+  { label: "Financial", href: "/reports/financial" },
+  { label: "Drivers", href: "/reports/drivers" },
+  { label: "Customers", href: "/reports/customers" },
 ] as const;
 
-const SALES_VEHICLES_ALLOWED_HREFS = new Set(["/dashboard", "/vehicle-crm", "/rates", "/tickets"]);
+const SALES_VEHICLES_ALLOWED_HREFS = new Set(["/dashboard", "/verification", "/rates", "/tickets"]);
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -158,11 +158,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             );
           }
 
-          const isTripsHistoryPath = pathname === "/trips/history" || pathname.startsWith("/trips/history/");
-          const isActive =
-            item.href === "/trips"
-              ? (pathname === item.href || pathname.startsWith(item.href + "/")) && !isTripsHistoryPath
-              : pathname === item.href || pathname.startsWith(item.href + "/");
+          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
           return (
             <Link

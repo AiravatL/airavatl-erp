@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -33,8 +32,7 @@ const SEVERITY_ICON: Record<string, React.ComponentType<{ className?: string }>>
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   super_admin: "Full overview of operations, approvals, and analytics",
   admin: "Full overview of operations, approvals, and analytics",
-  operations_consigner: "Trip dispatch, documents, and payment requests",
-  operations_vehicles: "Fleet management, vendor coordination, and market rates",
+  operations: "Trip dispatch, fleet management, and vendor coordination",
   sales_vehicles: "Vehicle sourcing, vendor onboarding, and market rates",
   sales_consigner: "Your customers, quotes, and collection follow-ups",
   accounts: "Payments, settlements, and receivable aging",
@@ -93,7 +91,7 @@ export default function DashboardPage() {
   const roleAlerts = allAlerts.filter((a) => {
     if (role === "super_admin" || role === "admin") return true;
     if (role === "sales_consigner" || role === "sales_vehicles") return ["overdue_receivable", "pod_overdue"].includes(a.type);
-    if (role === "operations_consigner" || role === "operations_vehicles") return ["missing_docs", "sla_breach", "pod_overdue"].includes(a.type);
+    if (role === "operations") return ["missing_docs", "sla_breach", "pod_overdue"].includes(a.type);
     if (role === "accounts") return ["pending_approval", "overdue_receivable", "fuel_variance"].includes(a.type);
     if (role === "support") return true;
     return false;
@@ -114,16 +112,10 @@ export default function DashboardPage() {
           { label: "Vehicle CRM", href: "/vehicle-crm", icon: Truck },
           { label: "Rate Library", href: "/rates", icon: Receipt },
         ];
-      case "operations_consigner":
+      case "operations":
         return [
-          { label: "New Trip", href: "/trips/new", icon: Plus },
           { label: "All Trips", href: "/trips", icon: Truck },
-          { label: "Payments", href: "/payments", icon: CreditCard },
-        ];
-      case "operations_vehicles":
-        return [
           { label: "Vendors", href: "/vendors", icon: Users },
-          { label: "Trips", href: "/trips", icon: Truck },
           { label: "Rate Library", href: "/rates", icon: Receipt },
         ];
       case "accounts":
@@ -148,7 +140,7 @@ export default function DashboardPage() {
   })();
 
   // Stats visible per role
-  const showPayments = ["super_admin", "admin", "operations_consigner", "operations_vehicles", "accounts"].includes(role);
+  const showPayments = ["super_admin", "admin", "operations", "accounts"].includes(role);
   const showReceivables = ["super_admin", "admin", "sales_consigner", "sales_vehicles", "accounts"].includes(role);
   const showTickets = ["super_admin", "admin", "support"].includes(role);
 
@@ -204,20 +196,15 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-gray-100">
-              {activeTrips.slice(0, 5).map((trip) => (
+              {activeTrips.slice(0, 5).map((trip, index) => (
                 <Link
-                  key={trip.id}
+                  key={`${trip.id}-${index}`}
                   href={`/trips/${trip.id}`}
                   className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-sm font-medium text-gray-900">{trip.tripCode}</span>
-                      {trip.leasedFlag && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-indigo-200 text-indigo-600">
-                          Leased
-                        </Badge>
-                      )}
                     </div>
                     <p className="text-xs text-gray-500 truncate">
                       {trip.customerName} &middot; {trip.route}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { requireServerActor } from "@/lib/auth/server-actor";
 import type { Role, Lead, LeadActivity, LeadStage, LeadActivityType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -122,32 +122,13 @@ export function isLeadActivityType(value: string): value is LeadActivityType {
 }
 
 export async function requireConsignerCrmActor() {
-  const supabase = await getSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const actorResult = await requireServerActor(CONSIGNER_CRM_ALLOWED_ROLES);
+  if ("error" in actorResult) return actorResult;
 
-  if (userError || !user) {
-    return { error: NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 }) };
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("id, role, active, full_name")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || !profile || !profile.active) {
-    return { error: NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 }) };
-  }
-
-  const actor = profile as ConsignerCrmActor;
-  if (!CONSIGNER_CRM_ALLOWED_ROLES.includes(actor.role)) {
-    return { error: NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 }) };
-  }
-
-  return { supabase, actor };
+  return {
+    supabase: actorResult.supabase,
+    actor: actorResult.actor as ConsignerCrmActor,
+  };
 }
 
 export function mapRpcError(message: string, code?: string) {

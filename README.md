@@ -37,6 +37,12 @@ pnpm install
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_DB_SCHEMA=public
+
+# Optional during the App DB cutover. Comma-separated module ids to ungate
+# after their app-backed `erp.*` RPCs are ready.
+# Example: NEXT_PUBLIC_ERP_ENABLED_MODULES=tickets,rates
+NEXT_PUBLIC_ERP_ENABLED_MODULES=
 
 # Required for admin user create/password update routes
 SUPABASE_SERVICE_ROLE_KEY=

@@ -1,8 +1,7 @@
 export type Role =
   | "super_admin"
   | "admin"
-  | "operations_consigner"
-  | "operations_vehicles"
+  | "operations"
   | "sales_vehicles"
   | "sales_consigner"
   | "accounts"
@@ -109,6 +108,33 @@ export interface VehicleMasterTypeOption {
   name: string;
   active: boolean;
   lengths: VehicleMasterLengthOption[];
+}
+
+export interface VehicleMasterVehicle {
+  id: string;
+  capacityTons: number;
+  lengthFeet: number | null;
+  bodyType: string;
+  wheelCount: number | null;
+  name: string;
+  code: string;
+  active: boolean;
+  displayOrder: number;
+}
+
+export interface VehicleMasterSegment {
+  id: string;
+  bodyType: string;
+  label: string;
+  weightMinKg: number;
+  weightMaxKg: number | null;
+  active: boolean;
+  displayOrder: number;
+}
+
+export interface VehicleMasterCatalog {
+  vehicles: VehicleMasterVehicle[];
+  segments: VehicleMasterSegment[];
 }
 
 // Per-vehicle policy for leased vehicles (overrides global PolicySettings)
@@ -377,57 +403,238 @@ export interface LeadActivity {
   createdAt: string;
 }
 
-// Vehicle CRM types (transporter/supply side)
-export type VehicleLeadStage = "new_entry" | "contacted" | "docs_pending" | "onboarded" | "rejected";
+// Partner Verification types
+export type PartnerUserType = "individual_driver" | "transporter";
+export type VerificationUploadDocType = "rc" | "dl" | "aadhaar" | "transport_license";
+export type VerificationUploadStatus =
+  | "prepared"
+  | "uploaded"
+  | "attached"
+  | "expired"
+  | "missing";
+export type VerificationUploadSource = "draft" | "final" | "none";
 
-export const VEHICLE_LEAD_STAGE_LABELS: Record<VehicleLeadStage, string> = {
-  new_entry: "New Entry",
-  contacted: "Contacted",
-  docs_pending: "Docs",
-  onboarded: "Onboarded",
-  rejected: "Rejected",
+export interface VerificationUploadSummary {
+  docType: VerificationUploadDocType;
+  status: VerificationUploadStatus;
+  objectKey: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  uploadedAt: string | null;
+  attachedAt: string | null;
+  source: VerificationUploadSource;
+}
+
+export interface PendingPartner {
+  userId: string;
+  fullName: string;
+  phone: string;
+  userType: PartnerUserType;
+  city: string | null;
+  state: string | null;
+  createdAt: string;
+}
+
+export interface VerificationDetails {
+  user: {
+    id: string;
+    fullName: string;
+    phone: string;
+    userType: PartnerUserType;
+    city: string | null;
+    state: string | null;
+    isVerified: boolean;
+    createdAt: string;
+  };
+  driver: {
+    id: string;
+    licenseNumber: string | null;
+    licenseExpiryDate: string | null;
+    licensePhotoUrl: string | null;
+    aadharNumber: string | null;
+    aadharPhotoUrl: string | null;
+    bankAccountNumber: string | null;
+    bankIfscCode: string | null;
+    bankAccountHolderName: string | null;
+    upiId: string | null;
+    isDocumentsVerified: boolean;
+    verificationNotes: string | null;
+    verifiedAt: string | null;
+    verifiedBy: string | null;
+  } | null;
+  transporter: {
+    id: string;
+    organizationName: string;
+    transportLicenseNumber: string | null;
+    transportLicenseExpiry: string | null;
+    licensePhotoUrl: string | null;
+    aadharNumber: string | null;
+    aadharPhotoUrl: string | null;
+    gstNumber: string | null;
+    panNumber: string | null;
+    bankAccountNumber: string | null;
+    bankIfscCode: string | null;
+    bankAccountHolderName: string | null;
+    upiId: string | null;
+    isDocumentsVerified: boolean;
+    verificationNotes: string | null;
+    verifiedAt: string | null;
+    verifiedBy: string | null;
+  } | null;
+  vehicle: {
+    id: string;
+    registrationNumber: string;
+    registrationCertificateUrl: string | null;
+    vehicleType: string;
+    isVerified: boolean;
+  } | null;
+  uploads: Partial<Record<VerificationUploadDocType, VerificationUploadSummary | null>>;
+}
+
+export interface SubmitDriverVerificationInput {
+  licenseNumber: string;
+  licenseExpiryDate?: string;
+  dlPhotoKey?: string;
+  aadharNumber: string;
+  aadharPhotoKey?: string;
+  registrationNumber: string;
+  vehicleType: string;
+  rcPhotoKey?: string;
+  bankAccountNumber: string;
+  bankIfscCode: string;
+  bankAccountHolderName: string;
+  upiId?: string;
+  notes?: string;
+}
+
+export interface SubmitTransporterVerificationInput {
+  transportLicenseNumber: string;
+  transportLicenseExpiry?: string;
+  licensePhotoKey?: string;
+  aadharNumber: string;
+  aadharPhotoKey?: string;
+  bankAccountNumber: string;
+  bankIfscCode: string;
+  bankAccountHolderName: string;
+  upiId?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  notes?: string;
+}
+
+export type SubmitVerificationInput = SubmitDriverVerificationInput | SubmitTransporterVerificationInput;
+
+// Delivery Request / Auction types
+export type DeliveryRequestStatus =
+  | "draft"
+  | "active"
+  | "ended"
+  | "winner_selected"
+  | "trip_created"
+  | "completed"
+  | "cancelled"
+  | "incomplete";
+
+export type VehicleTypeRequired =
+  | "three_wheeler"
+  | "pickup_truck"
+  | "mini_truck"
+  | "medium_truck"
+  | "large_truck"
+  | "tata_ace"
+  | "tempo"
+  | "container_truck"
+  | "trailer";
+
+export const VEHICLE_TYPE_LABELS: Record<VehicleTypeRequired, string> = {
+  three_wheeler: "3 Wheeler",
+  pickup_truck: "Pickup Truck",
+  mini_truck: "Mini Truck",
+  medium_truck: "Medium Truck",
+  large_truck: "Large Truck",
+  tata_ace: "Tata Ace",
+  tempo: "Tempo",
+  container_truck: "Container Truck",
+  trailer: "Trailer",
 };
 
-export const VEHICLE_LEAD_STAGES: VehicleLeadStage[] = [
-  "new_entry", "contacted", "docs_pending", "onboarded", "rejected",
-];
+export type CargoType = "general" | "fragile" | "perishable" | "hazardous" | "valuable";
 
-export interface VehicleLead {
-  id: string;
-  driverName: string;
-  mobile: string;
-  alternateContact: string;
-  ownerName: string;
-  ownerContact: string;
-  isOwnerCumDriver: boolean;
-  currentAddress: string;
-  permanentAddress: string;
-  preferredRoute: string;
-  vehicleType: string;
-  vehicleLength: string;
-  vehicleCapacity: string;
-  vehicleRegistration: string;
-  marketRate: number;
-  stage: VehicleLeadStage;
-  remarks: string;
-  addedById: string;
-  addedByName: string;
-  nextFollowUp: string | null;
-  convertedVendorId?: string | null;
-  createdAt: string;
-  updatedAt: string;
+export const CARGO_TYPE_LABELS: Record<CargoType, string> = {
+  general: "General",
+  fragile: "Fragile",
+  perishable: "Perishable",
+  hazardous: "Hazardous",
+  valuable: "Valuable",
+};
+
+export const DELIVERY_REQUEST_STATUS_LABELS: Record<DeliveryRequestStatus, string> = {
+  draft: "Draft",
+  active: "Active",
+  ended: "Ended",
+  winner_selected: "Winner Selected",
+  trip_created: "Trip Created",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  incomplete: "Incomplete",
+};
+
+export interface SelectWinnerResult {
+  trip_id: string;
+  trip_number: string;
+  pickup_otp: string;
+  bid_amount: number;
+  consigner_trip_amount: number;
 }
 
-export type VehicleLeadActivityType = "call" | "whatsapp" | "meeting" | "note" | "stage_change" | "doc_upload";
-
-export interface VehicleLeadActivity {
-  id: string;
-  vehicleLeadId: string;
-  type: VehicleLeadActivityType;
-  description: string;
-  createdBy: string;
-  createdAt: string;
+export interface TripMetadata {
+  consigner_trip_amount: number;
+  selected_by_admin_id: string;
+  selected_by_name: string | null;
 }
+
+export type AuctionSource = "erp" | "app";
+
+export type AppTripStatus =
+  | "pending"
+  | "waiting_driver_acceptance"
+  | "driver_assigned"
+  | "en_route_to_pickup"
+  | "at_pickup"
+  | "loading"
+  | "in_transit"
+  | "at_delivery"
+  | "unloading"
+  | "completed"
+  | "cancelled"
+  | "driver_rejected";
+
+export const APP_TRIP_STATUS_LABELS: Record<AppTripStatus, string> = {
+  pending: "Pending",
+  waiting_driver_acceptance: "Waiting Driver",
+  driver_assigned: "Driver Assigned",
+  en_route_to_pickup: "En Route to Pickup",
+  at_pickup: "At Pickup",
+  loading: "Loading",
+  in_transit: "In Transit",
+  at_delivery: "At Delivery",
+  unloading: "Unloading",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  driver_rejected: "Driver Rejected",
+};
+
+export const AUCTION_DURATION_OPTIONS = [
+  { value: 15, label: "15 minutes" },
+  { value: 30, label: "30 minutes" },
+  { value: 60, label: "1 hour" },
+  { value: 120, label: "2 hours" },
+  { value: 240, label: "4 hours" },
+  { value: 480, label: "8 hours" },
+  { value: 720, label: "12 hours" },
+  { value: 1440, label: "24 hours" },
+] as const;
 
 export type RateStatus = "pending" | "approved" | "rejected";
 

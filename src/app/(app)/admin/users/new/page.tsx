@@ -9,7 +9,7 @@ import { UserUpsertForm, type UserUpsertFormValues } from "@/components/admin/us
 const DEFAULT_CREATE_VALUES: UserUpsertFormValues = {
   fullName: "",
   email: "",
-  role: "operations_consigner",
+  role: "operations",
   password: "",
   active: true,
 };

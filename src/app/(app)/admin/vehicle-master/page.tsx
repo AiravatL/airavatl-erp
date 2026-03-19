@@ -1,336 +1,533 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Truck, Plus, Pencil, Trash2, Weight } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import {
-  createVehicleMasterLength,
-  createVehicleMasterType,
-  listAdminVehicleMaster,
-  updateVehicleMasterLength,
-  updateVehicleMasterType,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  listVehicleMasterCatalog,
+  createVehicle, updateVehicle, deleteVehicle,
+  createSegment, updateSegment, deleteSegment,
+  type UpsertVehicleInput, type UpsertSegmentInput,
 } from "@/lib/api/vehicle-master";
+import type { VehicleMasterVehicle, VehicleMasterSegment } from "@/lib/types";
 import { queryKeys } from "@/lib/query/keys";
-import type { VehicleMasterTypeOption } from "@/lib/types";
-import { Pencil, Plus, Trash2 } from "lucide-react";
 
 export default function AdminVehicleMasterPage() {
   const queryClient = useQueryClient();
-  const [newTypeName, setNewTypeName] = useState("");
-  const [newLengthByType, setNewLengthByType] = useState<Record<string, string>>({});
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionInfo, setActionInfo] = useState<string | null>(null);
-
-  const vehicleMasterQuery = useQuery({
-    queryKey: queryKeys.adminVehicleMaster,
-    queryFn: listAdminVehicleMaster,
+  const catalogQuery = useQuery({
+    queryKey: queryKeys.adminVehicleMaster(true),
+    queryFn: () => listVehicleMasterCatalog(true),
   });
 
-  async function refreshVehicleMaster() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.adminVehicleMaster }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.vehicleMasterOptions }),
-    ]);
-  }
-
-  const createTypeMutation = useMutation({
-    mutationFn: createVehicleMasterType,
-    onSuccess: async (created) => {
-      setActionInfo(`Vehicle type ${created.name} created.`);
-      setNewTypeName("");
-      await refreshVehicleMaster();
-    },
-    onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Unable to create vehicle type");
-    },
-  });
-
-  const updateTypeMutation = useMutation({
-    mutationFn: ({ typeId, payload }: { typeId: string; payload: Parameters<typeof updateVehicleMasterType>[1] }) =>
-      updateVehicleMasterType(typeId, payload),
-    onSuccess: async () => {
-      setActionInfo("Vehicle type updated.");
-      await refreshVehicleMaster();
-    },
-    onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Unable to update vehicle type");
-    },
-  });
-
-  const createLengthMutation = useMutation({
-    mutationFn: createVehicleMasterLength,
-    onSuccess: async () => {
-      setActionInfo("Vehicle length added.");
-      await refreshVehicleMaster();
-    },
-    onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Unable to add vehicle length");
-    },
-  });
-
-  const updateLengthMutation = useMutation({
-    mutationFn: ({ lengthId, payload }: { lengthId: string; payload: Parameters<typeof updateVehicleMasterLength>[1] }) =>
-      updateVehicleMasterLength(lengthId, payload),
-    onSuccess: async () => {
-      setActionInfo("Vehicle length updated.");
-      await refreshVehicleMaster();
-    },
-    onError: (error) => {
-      setActionError(error instanceof Error ? error.message : "Unable to update vehicle length");
-    },
-  });
-
-  async function handleCreateType() {
-    setActionError(null);
-    setActionInfo(null);
-    const name = newTypeName.trim();
-    if (!name) return;
-    await createTypeMutation.mutateAsync({ name, active: true });
-  }
-
-  async function handleRenameType(type: VehicleMasterTypeOption) {
-    setActionError(null);
-    setActionInfo(null);
-    const nextName = window.prompt("Update vehicle type name", type.name)?.trim();
-    if (!nextName || nextName === type.name) return;
-    await updateTypeMutation.mutateAsync({ typeId: type.id, payload: { name: nextName } });
-  }
-
-  async function handleToggleType(type: VehicleMasterTypeOption, active: boolean) {
-    setActionError(null);
-    setActionInfo(null);
-    await updateTypeMutation.mutateAsync({
-      typeId: type.id,
-      payload: { active, applyToLengths: true },
-    });
-  }
-
-  async function handleCreateLength(type: VehicleMasterTypeOption) {
-    setActionError(null);
-    setActionInfo(null);
-    const lengthValue = (newLengthByType[type.id] ?? "").trim();
-    if (!lengthValue) return;
-
-    await createLengthMutation.mutateAsync({
-      vehicleTypeId: type.id,
-      lengthValue,
-      active: true,
-    });
-
-    setNewLengthByType((prev) => ({ ...prev, [type.id]: "" }));
-  }
-
-  async function handleRenameLength(type: VehicleMasterTypeOption, length: VehicleMasterTypeOption["lengths"][number]) {
-    setActionError(null);
-    setActionInfo(null);
-    const nextValue = window.prompt("Update vehicle length", length.value)?.trim();
-    if (!nextValue || nextValue === length.value) return;
-
-    await updateLengthMutation.mutateAsync({
-      lengthId: length.id,
-      payload: {
-        vehicleTypeId: type.id,
-        lengthValue: nextValue,
-      },
-    });
-  }
-
-  async function handleToggleLength(lengthId: string, active: boolean) {
-    setActionError(null);
-    setActionInfo(null);
-    await updateLengthMutation.mutateAsync({
-      lengthId,
-      payload: { active },
-    });
-  }
-
-  const types = vehicleMasterQuery.data ?? [];
-  const queryError =
-    vehicleMasterQuery.error instanceof Error ? vehicleMasterQuery.error.message : "Unable to load vehicle master";
+  const vehicles = catalogQuery.data?.vehicles ?? [];
+  const segments = catalogQuery.data?.segments ?? [];
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-vehicle-master"] });
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <PageHeader
-        title="Vehicle Master"
-        description="Manage vehicle type and length options used in CRM forms"
-      />
+    <div className="space-y-4 p-4 sm:p-6">
+      <PageHeader title="Vehicle Master" description="Manage vehicle catalog and weight segments across the platform" />
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-gray-900">Add Vehicle Type</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1 space-y-1">
-            <Label className="text-xs">Vehicle Type Name</Label>
-            <Input
-              value={newTypeName}
-              onChange={(event) => setNewTypeName(event.target.value)}
-              placeholder="e.g. 32ft MXL"
-              className="h-9 text-sm"
-            />
-          </div>
-          <Button
-            size="sm"
-            className="h-9"
-            disabled={createTypeMutation.isPending || !newTypeName.trim()}
-            onClick={() => void handleCreateType()}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Add Type
-          </Button>
-        </CardContent>
-      </Card>
+      {catalogQuery.isLoading ? (
+        <Card><CardContent className="p-4 text-sm text-gray-500">Loading...</CardContent></Card>
+      ) : catalogQuery.isError ? (
+        <Card><CardContent className="p-4 text-sm text-red-600">
+          {catalogQuery.error instanceof Error ? catalogQuery.error.message : "Unable to load vehicle master"}
+        </CardContent></Card>
+      ) : (
+        <Tabs defaultValue="vehicles">
+          <TabsList className="bg-gray-100 h-8">
+            <TabsTrigger value="vehicles" className="text-xs h-7 data-[state=active]:bg-white">
+              Vehicles ({vehicles.length})
+            </TabsTrigger>
+            <TabsTrigger value="segments" className="text-xs h-7 data-[state=active]:bg-white">
+              Weight Segments ({segments.length})
+            </TabsTrigger>
+          </TabsList>
 
-      {actionError && (
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-red-600">{actionError}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {actionInfo && (
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-emerald-700">{actionInfo}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {vehicleMasterQuery.isLoading && (
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-500">Loading vehicle master...</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {!vehicleMasterQuery.isLoading && vehicleMasterQuery.isError && (
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-red-600">{queryError}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {!vehicleMasterQuery.isLoading && !vehicleMasterQuery.isError && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {types.map((type) => (
-            <Card key={type.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <CardTitle className="truncate text-sm">{type.name}</CardTitle>
-                    <p className="text-xs text-gray-500">{type.lengths.length} lengths</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className={`border-0 text-[10px] ${type.active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}
-                    >
-                      {type.active ? "Active" : "Inactive"}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => void handleRenameType(type)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Switch
-                      checked={type.active}
-                      onCheckedChange={(checked) => {
-                        void handleToggleType(type, checked);
-                      }}
-                    />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  {type.lengths.length === 0 ? (
-                    <div className="rounded border border-dashed border-gray-200 p-3">
-                      <p className="text-xs text-gray-400">No lengths added</p>
-                    </div>
-                  ) : (
-                    type.lengths.map((length) => (
-                      <div
-                        key={length.id}
-                        className="flex items-center justify-between rounded border border-gray-200 px-2.5 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-gray-900">{length.value}</p>
-                          <p className="text-[11px] text-gray-500">{length.active ? "Active" : "Inactive"}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              void handleRenameLength(type, length);
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-red-600 hover:text-red-700"
-                            onClick={() => {
-                              void handleToggleLength(length.id, false);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                          <Switch
-                            checked={length.active}
-                            onCheckedChange={(checked) => {
-                              void handleToggleLength(length.id, checked);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="flex items-end gap-2">
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs">Add Length</Label>
-                    <Input
-                      value={newLengthByType[type.id] ?? ""}
-                      onChange={(event) =>
-                        setNewLengthByType((prev) => ({ ...prev, [type.id]: event.target.value }))
-                      }
-                      placeholder="e.g. 32ft"
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <Button
-                    size="sm"
-                    className="h-8"
-                    disabled={createLengthMutation.isPending || !(newLengthByType[type.id] ?? "").trim()}
-                    onClick={() => {
-                      void handleCreateLength(type);
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+          <TabsContent value="vehicles" className="mt-4">
+            <VehiclesTab vehicles={vehicles} onMutate={invalidate} />
+          </TabsContent>
+          <TabsContent value="segments" className="mt-4">
+            <SegmentsTab segments={segments} onMutate={invalidate} />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
+  );
+}
+
+/* ========== Vehicles Tab ========== */
+
+function VehiclesTab({ vehicles, onMutate }: { vehicles: VehicleMasterVehicle[]; onMutate: () => void }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<VehicleMasterVehicle | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VehicleMasterVehicle | null>(null);
+
+  const createMut = useMutation({ mutationFn: (input: UpsertVehicleInput) => createVehicle(input), onSuccess: () => { onMutate(); setDialogOpen(false); } });
+  const updateMut = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpsertVehicleInput }) => updateVehicle(id, input), onSuccess: () => { onMutate(); setDialogOpen(false); setEditing(null); } });
+  const deleteMut = useMutation({ mutationFn: (id: string) => deleteVehicle(id), onSuccess: () => { onMutate(); setDeleteTarget(null); } });
+
+  const openCreate = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (v: VehicleMasterVehicle) => { setEditing(v); setDialogOpen(true); };
+
+  const openBodies = vehicles.filter((v) => v.bodyType === "open");
+  const containerBodies = vehicles.filter((v) => v.bodyType === "container");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{vehicles.length} vehicle{vehicles.length !== 1 ? "s" : ""} in catalog</p>
+        <Button size="sm" className="h-8 text-xs" onClick={openCreate}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Add Vehicle
+        </Button>
+      </div>
+
+      {openBodies.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Badge variant="outline" className="border-0 bg-blue-50 text-blue-700 text-[10px]">Open</Badge>
+              Open Trucks ({openBodies.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <VehicleTable vehicles={openBodies} onEdit={openEdit} onDelete={setDeleteTarget} />
+          </CardContent>
+        </Card>
+      )}
+
+      {containerBodies.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Badge variant="outline" className="border-0 bg-purple-50 text-purple-700 text-[10px]">Container</Badge>
+              Containers ({containerBodies.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <VehicleTable vehicles={containerBodies} onEdit={openEdit} onDelete={setDeleteTarget} />
+          </CardContent>
+        </Card>
+      )}
+
+      {vehicles.length === 0 && (
+        <Card><CardContent className="p-6 text-center">
+          <Truck className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">No vehicles yet. Add your first vehicle.</p>
+        </CardContent></Card>
+      )}
+
+      <VehicleDialog
+        open={dialogOpen}
+        editing={editing}
+        isLoading={createMut.isPending || updateMut.isPending}
+        error={createMut.error ?? updateMut.error}
+        onClose={() => { setDialogOpen(false); setEditing(null); createMut.reset(); updateMut.reset(); }}
+        onSubmit={(input) => editing ? updateMut.mutate({ id: editing.id, input }) : createMut.mutate(input)}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This vehicle will be permanently removed. If it's referenced by market rates, deletion will fail — deactivate it instead."
+        isLoading={deleteMut.isPending}
+        error={deleteMut.error}
+        onClose={() => { setDeleteTarget(null); deleteMut.reset(); }}
+        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+      />
+    </div>
+  );
+}
+
+function VehicleTable({ vehicles, onEdit, onDelete }: {
+  vehicles: VehicleMasterVehicle[];
+  onEdit: (v: VehicleMasterVehicle) => void;
+  onDelete: (v: VehicleMasterVehicle) => void;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="border-b border-gray-100 bg-gray-50/50">
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Weight</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Length</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Wheels</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Name</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Status</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {vehicles.map((v) => (
+          <TableRow key={v.id} className="hover:bg-gray-50/50 transition-colors border-gray-50">
+            <TableCell className="px-4 py-3 text-sm font-medium text-gray-900">{v.capacityTons}T</TableCell>
+            <TableCell className="px-4 py-3 text-sm text-gray-600">{v.lengthFeet ? `${v.lengthFeet}ft` : "—"}</TableCell>
+            <TableCell className="px-4 py-3 text-sm text-gray-600">{v.wheelCount ? `${v.wheelCount}W` : "—"}</TableCell>
+            <TableCell className="px-4 py-3 text-sm text-gray-700">{v.name}</TableCell>
+            <TableCell className="px-4 py-3">
+              <Badge variant="outline" className={`text-[10px] border-0 ${v.active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                {v.active ? "Active" : "Inactive"}
+              </Badge>
+            </TableCell>
+            <TableCell className="px-4 py-3 text-right">
+              <div className="flex items-center justify-end gap-1">
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(v)}>
+                  <Pencil className="h-3.5 w-3.5 text-gray-500" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onDelete(v)}>
+                  <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/* ========== Segments Tab ========== */
+
+function SegmentsTab({ segments, onMutate }: { segments: VehicleMasterSegment[]; onMutate: () => void }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<VehicleMasterSegment | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VehicleMasterSegment | null>(null);
+
+  const createMut = useMutation({ mutationFn: (input: UpsertSegmentInput) => createSegment(input), onSuccess: () => { onMutate(); setDialogOpen(false); } });
+  const updateMut = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpsertSegmentInput }) => updateSegment(id, input), onSuccess: () => { onMutate(); setDialogOpen(false); setEditing(null); } });
+  const deleteMut = useMutation({ mutationFn: (id: string) => deleteSegment(id), onSuccess: () => { onMutate(); setDeleteTarget(null); } });
+
+  const openSegs = segments.filter((s) => s.bodyType === "open");
+  const containerSegs = segments.filter((s) => s.bodyType === "container");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{segments.length} weight segment{segments.length !== 1 ? "s" : ""}</p>
+        <Button size="sm" className="h-8 text-xs" onClick={() => { setEditing(null); setDialogOpen(true); }}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Add Segment
+        </Button>
+      </div>
+
+      {openSegs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Badge variant="outline" className="border-0 bg-blue-50 text-blue-700 text-[10px]">Open</Badge>
+              Open Truck Segments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <SegmentTable segments={openSegs} onEdit={(s) => { setEditing(s); setDialogOpen(true); }} onDelete={setDeleteTarget} />
+          </CardContent>
+        </Card>
+      )}
+
+      {containerSegs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Badge variant="outline" className="border-0 bg-purple-50 text-purple-700 text-[10px]">Container</Badge>
+              Container Segments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <SegmentTable segments={containerSegs} onEdit={(s) => { setEditing(s); setDialogOpen(true); }} onDelete={setDeleteTarget} />
+          </CardContent>
+        </Card>
+      )}
+
+      {segments.length === 0 && (
+        <Card><CardContent className="p-6 text-center">
+          <Weight className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">No weight segments yet.</p>
+        </CardContent></Card>
+      )}
+
+      <SegmentDialog
+        open={dialogOpen}
+        editing={editing}
+        isLoading={createMut.isPending || updateMut.isPending}
+        error={createMut.error ?? updateMut.error}
+        onClose={() => { setDialogOpen(false); setEditing(null); createMut.reset(); updateMut.reset(); }}
+        onSubmit={(input) => editing ? updateMut.mutate({ id: editing.id, input }) : createMut.mutate(input)}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        title={`Delete "${deleteTarget?.label}"?`}
+        description="This weight segment will be permanently removed."
+        isLoading={deleteMut.isPending}
+        error={deleteMut.error}
+        onClose={() => { setDeleteTarget(null); deleteMut.reset(); }}
+        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+      />
+    </div>
+  );
+}
+
+function SegmentTable({ segments, onEdit, onDelete }: {
+  segments: VehicleMasterSegment[];
+  onEdit: (s: VehicleMasterSegment) => void;
+  onDelete: (s: VehicleMasterSegment) => void;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="border-b border-gray-100 bg-gray-50/50">
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Label</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Min Weight</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Max Weight</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500">Status</TableHead>
+          <TableHead className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {segments.map((s) => (
+          <TableRow key={s.id} className="hover:bg-gray-50/50 transition-colors border-gray-50">
+            <TableCell className="px-4 py-3 text-sm font-medium text-gray-900">{s.label}</TableCell>
+            <TableCell className="px-4 py-3 text-sm text-gray-600">{s.weightMinKg.toLocaleString("en-IN")} kg</TableCell>
+            <TableCell className="px-4 py-3 text-sm text-gray-600">{s.weightMaxKg ? `${s.weightMaxKg.toLocaleString("en-IN")} kg` : "No limit"}</TableCell>
+            <TableCell className="px-4 py-3">
+              <Badge variant="outline" className={`text-[10px] border-0 ${s.active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                {s.active ? "Active" : "Inactive"}
+              </Badge>
+            </TableCell>
+            <TableCell className="px-4 py-3 text-right">
+              <div className="flex items-center justify-end gap-1">
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(s)}>
+                  <Pencil className="h-3.5 w-3.5 text-gray-500" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onDelete(s)}>
+                  <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/* ========== Dialogs ========== */
+
+function VehicleDialog({ open, editing, isLoading, error, onClose, onSubmit }: {
+  open: boolean;
+  editing: VehicleMasterVehicle | null;
+  isLoading: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onSubmit: (input: UpsertVehicleInput) => void;
+}) {
+  const [capacityTons, setCapacityTons] = useState("");
+  const [lengthFeet, setLengthFeet] = useState("");
+  const [bodyType, setBodyType] = useState("open");
+  const [wheelCount, setWheelCount] = useState("");
+  const [active, setActive] = useState(true);
+
+  const resetForm = () => {
+    if (editing) {
+      setCapacityTons(String(editing.capacityTons));
+      setLengthFeet(editing.lengthFeet ? String(editing.lengthFeet) : "");
+      setBodyType(editing.bodyType);
+      setWheelCount(editing.wheelCount ? String(editing.wheelCount) : "");
+      setActive(editing.active);
+    } else {
+      setCapacityTons(""); setLengthFeet(""); setBodyType("open"); setWheelCount(""); setActive(true);
+    }
+  };
+
+  const previewName = (() => {
+    const ct = Number(capacityTons);
+    if (!ct) return "";
+    let n = `${ct}T`;
+    if (lengthFeet) n += ` ${Number(lengthFeet)}ft`;
+    if (wheelCount) n += ` ${Number(wheelCount)}W`;
+    n += ` ${bodyType === "container" ? "Container" : "Open"}`;
+    return n;
+  })();
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); else resetForm(); }}>
+      <DialogContent className="sm:max-w-md" onOpenAutoFocus={resetForm as () => void}>
+        <DialogHeader>
+          <DialogTitle className="text-base">{editing ? "Edit Vehicle" : "Add Vehicle"}</DialogTitle>
+          {previewName && (
+            <DialogDescription className="text-xs">
+              Preview: <span className="font-medium text-gray-800">{previewName}</span>
+            </DialogDescription>
+          )}
+        </DialogHeader>
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit({
+          capacityTons: Number(capacityTons),
+          lengthFeet: lengthFeet ? Number(lengthFeet) : null,
+          bodyType,
+          wheelCount: wheelCount ? Number(wheelCount) : null,
+          active,
+        }); }} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Weight (Tons) *</Label>
+              <Input type="number" step="0.1" min="0.1" value={capacityTons} onChange={(e) => setCapacityTons(e.target.value)} className="h-9 mt-1" required />
+            </div>
+            <div>
+              <Label className="text-xs">Length (ft)</Label>
+              <Input type="number" step="0.5" min="1" value={lengthFeet} onChange={(e) => setLengthFeet(e.target.value)} className="h-9 mt-1" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Body Type *</Label>
+              <Select value={bodyType} onValueChange={setBodyType}>
+                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="container">Container</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Wheels</Label>
+              <Input type="number" min="3" max="22" value={wheelCount} onChange={(e) => setWheelCount(e.target.value)} className="h-9 mt-1" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch id="v-active" checked={active} onCheckedChange={setActive} />
+            <Label htmlFor="v-active" className="text-xs">Active</Label>
+          </div>
+          {error && <p className="text-xs text-red-600">{error.message}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={onClose} className="h-8 text-xs">Cancel</Button>
+            <Button type="submit" size="sm" disabled={isLoading || !capacityTons} className="h-8 text-xs">
+              {isLoading ? "Saving..." : editing ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SegmentDialog({ open, editing, isLoading, error, onClose, onSubmit }: {
+  open: boolean;
+  editing: VehicleMasterSegment | null;
+  isLoading: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onSubmit: (input: UpsertSegmentInput) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [bodyType, setBodyType] = useState("open");
+  const [weightMinKg, setWeightMinKg] = useState("");
+  const [weightMaxKg, setWeightMaxKg] = useState("");
+  const [active, setActive] = useState(true);
+
+  const resetForm = () => {
+    if (editing) {
+      setLabel(editing.label); setBodyType(editing.bodyType);
+      setWeightMinKg(String(editing.weightMinKg));
+      setWeightMaxKg(editing.weightMaxKg ? String(editing.weightMaxKg) : "");
+      setActive(editing.active);
+    } else {
+      setLabel(""); setBodyType("open"); setWeightMinKg(""); setWeightMaxKg(""); setActive(true);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); else resetForm(); }}>
+      <DialogContent className="sm:max-w-md" onOpenAutoFocus={resetForm as () => void}>
+        <DialogHeader>
+          <DialogTitle className="text-base">{editing ? "Edit Segment" : "Add Segment"}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit({
+          label, bodyType,
+          weightMinKg: Number(weightMinKg || 0),
+          weightMaxKg: weightMaxKg ? Number(weightMaxKg) : null,
+          active,
+        }); }} className="space-y-3">
+          <div>
+            <Label className="text-xs">Label *</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g., 2.5-5 Ton" className="h-9 mt-1" required />
+          </div>
+          <div>
+            <Label className="text-xs">Body Type *</Label>
+            <Select value={bodyType} onValueChange={setBodyType}>
+              <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">Open</SelectItem>
+                <SelectItem value="container">Container</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Min Weight (kg) *</Label>
+              <Input type="number" min="0" value={weightMinKg} onChange={(e) => setWeightMinKg(e.target.value)} className="h-9 mt-1" required />
+            </div>
+            <div>
+              <Label className="text-xs">Max Weight (kg)</Label>
+              <Input type="number" min="0" value={weightMaxKg} onChange={(e) => setWeightMaxKg(e.target.value)} placeholder="No limit" className="h-9 mt-1" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch id="s-active" checked={active} onCheckedChange={setActive} />
+            <Label htmlFor="s-active" className="text-xs">Active</Label>
+          </div>
+          {error && <p className="text-xs text-red-600">{error.message}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={onClose} className="h-8 text-xs">Cancel</Button>
+            <Button type="submit" size="sm" disabled={isLoading || !label} className="h-8 text-xs">
+              {isLoading ? "Saving..." : editing ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConfirmDeleteDialog({ open, title, description, isLoading, error, onClose, onConfirm }: {
+  open: boolean;
+  title: string;
+  description: string;
+  isLoading: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-base">{title}</DialogTitle>
+          <DialogDescription className="text-xs">{description}</DialogDescription>
+        </DialogHeader>
+        {error && <p className="text-xs text-red-600">{error.message}</p>}
+        <DialogFooter>
+          <Button type="button" variant="outline" size="sm" onClick={onClose} className="h-8 text-xs">Cancel</Button>
+          <Button type="button" variant="destructive" size="sm" disabled={isLoading} onClick={onConfirm} className="h-8 text-xs">
+            {isLoading ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

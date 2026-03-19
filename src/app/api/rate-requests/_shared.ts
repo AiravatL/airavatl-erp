@@ -4,29 +4,28 @@ import { requireRateActor } from "@/app/api/rates/_shared";
 
 export const RATE_REQUEST_CREATOR_ROLES: Role[] = [
   "sales_consigner",
-  "operations_consigner",
+  "operations",
   "admin",
   "super_admin",
 ];
 
 export const RATE_REQUEST_VIEW_ROLES: Role[] = [
   "sales_consigner",
-  "operations_consigner",
+  "operations",
   "sales_vehicles",
-  "operations_vehicles",
   "admin",
   "super_admin",
 ];
 
 export const RATE_REQUEST_PRICING_ROLES: Role[] = [
   "sales_vehicles",
-  "operations_vehicles",
+  "operations",
   "admin",
   "super_admin",
 ];
 
 export const RATE_REQUEST_REVIEW_ROLES: Role[] = [
-  "operations_vehicles",
+  "operations",
   "admin",
   "super_admin",
 ];

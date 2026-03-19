@@ -28,9 +28,9 @@ import { sanitizeDecimalInput } from "@/lib/validation/client/validators";
 import { sanitizeMultilineInput, sanitizeSingleLineInput } from "@/lib/validation/client/sanitizers";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
 
-const REQUEST_ROLES: Role[] = ["sales_consigner", "operations_consigner", "admin", "super_admin"];
-const PRICING_ROLES: Role[] = ["sales_vehicles", "operations_vehicles", "admin", "super_admin"];
-const REVIEW_ROLES: Role[] = ["operations_vehicles", "admin", "super_admin"];
+const REQUEST_ROLES: Role[] = ["sales_consigner", "operations", "admin", "super_admin"];
+const PRICING_ROLES: Role[] = ["sales_vehicles", "operations", "admin", "super_admin"];
+const REVIEW_ROLES: Role[] = ["operations", "admin", "super_admin"];
 
 const STATUS_FILTERS = [
   { value: "all", label: "All" },

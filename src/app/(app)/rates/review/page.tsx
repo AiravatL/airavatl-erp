@@ -60,9 +60,9 @@ const RATE_STATUS_COLORS: Record<RateStatus, string> = {
   rejected: "bg-red-50 text-red-700",
 };
 
-const REVIEW_ACCESS_ROLES = ["super_admin", "admin", "operations_vehicles", "sales_vehicles"] as const;
-const REVIEW_DECISION_ROLES = ["super_admin", "admin", "operations_vehicles"] as const;
-const EDIT_ROLES: Role[] = ["sales_vehicles", "operations_vehicles", "admin", "super_admin"];
+const REVIEW_ACCESS_ROLES = ["super_admin", "admin", "operations", "sales_vehicles"] as const;
+const REVIEW_DECISION_ROLES = ["super_admin", "admin", "operations"] as const;
+const EDIT_ROLES: Role[] = ["sales_vehicles", "operations", "admin", "super_admin"];
 const COLLAPSED_COMMENT_COUNT = 2;
 const RATE_COMMENT_MAX_LENGTH = 500;
 

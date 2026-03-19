@@ -61,11 +61,10 @@ export async function POST(request: Request, context: RouteParams) {
   const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc(
     "consigner_lead_win_convert_v1",
     {
-      p_actor: actorResult.actor.id,
+      p_actor_user_id: actorResult.actor.id,
       p_lead_id: leadId,
       p_credit_days: creditDays,
       p_credit_limit: creditLimit,
-      p_address: address,
       p_gstin: gstin,
     } as never,
   );

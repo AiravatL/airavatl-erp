@@ -70,7 +70,7 @@ export async function POST(
     return NextResponse.json({ ok: false, message: "Unable to prepare POD upload" }, { status: 500 });
   }
 
-  const workerConfig = getR2WorkerConfig();
+  const workerConfig = await getR2WorkerConfig();
   const { data: sessionData } = await actorResult.supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token ?? null;
 
