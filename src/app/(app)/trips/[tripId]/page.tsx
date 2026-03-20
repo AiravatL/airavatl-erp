@@ -69,6 +69,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
   const tripQuery = useQuery({
     queryKey: queryKeys.trip(tripId),
     queryFn: () => getAuctionTrip(tripId),
+    staleTime: 15_000,
+    refetchInterval: 15_000,
   });
 
   const status = (tripQuery.data?.trip?.status as AppTripStatus) ?? null;
@@ -78,12 +80,15 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
     queryKey: queryKeys.tripPaymentSummary(tripId),
     queryFn: () => getTripPaymentSummary(tripId),
     enabled: !!tripQuery.data,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
   });
 
   const loadingProofsQuery = useQuery({
     queryKey: queryKeys.tripLoadingProofs(tripId),
     queryFn: () => listTripLoadingProofs(tripId),
     enabled: !!tripQuery.data,
+    staleTime: 60_000,
   });
 
   const isTerminal = status != null && ["completed", "cancelled", "driver_rejected"].includes(status);

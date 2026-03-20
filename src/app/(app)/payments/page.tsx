@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -189,6 +189,9 @@ export default function PaymentsPage() {
         limit: 200,
       }),
     enabled: canManagePayments,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
+    placeholderData: keepPreviousData,
   });
 
   const queue = useMemo(() => queueQuery.data ?? [], [queueQuery.data]);

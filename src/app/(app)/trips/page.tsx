@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/page-header";
 import { KpiCard } from "@/components/reports/kpi-card";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +63,9 @@ export default function TripsListPage() {
   const query = useQuery({
     queryKey: queryKeys.appTrips(filters),
     queryFn: () => listAppTrips(filters),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
   });
 
   const TERMINAL = new Set(["completed", "cancelled", "driver_rejected"]);

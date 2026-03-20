@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/page-header";
 import { KpiCard } from "@/components/reports/kpi-card";
@@ -66,6 +66,9 @@ export default function DeliveryRequestsPage() {
   const erpQuery = useQuery({
     queryKey: queryKeys.deliveryRequests({ ...erpFilters }),
     queryFn: () => listDeliveryRequests(erpFilters),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
   });
   // Filter out terminal statuses (those belong in history)
   const erpAllItems = erpQuery.data?.items ?? [];
@@ -89,6 +92,9 @@ export default function DeliveryRequestsPage() {
   const appQuery = useQuery({
     queryKey: queryKeys.deliveryRequests({ ...appFilters }),
     queryFn: () => listDeliveryRequests(appFilters),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
   });
   const appAllItems = appQuery.data?.items ?? [];
   const appItems = appStatus ? appAllItems : appAllItems.filter((i) => !TERMINAL.has(i.status));

@@ -80,9 +80,10 @@ export default function AuctionDetailPage({
   const { data, isLoading, error: fetchError } = useQuery({
     queryKey: queryKeys.deliveryRequest(requestId),
     queryFn: () => getDeliveryRequest(requestId),
+    staleTime: 10_000,
     refetchInterval: (query) => {
       const status = (query.state.data?.request as Record<string, unknown>)?.status;
-      return status === "active" ? 10_000 : false;
+      return status === "active" ? 10_000 : 60_000;
     },
   });
 
