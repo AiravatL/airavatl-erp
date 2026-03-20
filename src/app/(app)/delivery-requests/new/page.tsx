@@ -37,14 +37,17 @@ export default function CreateDeliveryRequestPage() {
   const [error, setError] = useState("");
   const sessionToken = useMemo(() => crypto.randomUUID(), []);
 
-  // Edit mode
+  // Edit or Repeat mode
   const editId = searchParams.get("edit") || null;
+  const repeatId = searchParams.get("repeat") || null;
+  const prefillId = editId || repeatId;
   const isEditMode = !!editId;
+  const isRepeatMode = !!repeatId;
 
   const editQuery = useQuery({
-    queryKey: queryKeys.deliveryRequest(editId ?? ""),
-    queryFn: () => getDeliveryRequest(editId!),
-    enabled: isEditMode,
+    queryKey: queryKeys.deliveryRequest(prefillId ?? ""),
+    queryFn: () => getDeliveryRequest(prefillId!),
+    enabled: !!prefillId,
   });
 
   // Form state
@@ -78,10 +81,10 @@ export default function CreateDeliveryRequestPage() {
 
   const [internalNotes, setInternalNotes] = useState("");
 
-  // Pre-fill in edit mode
+  // Pre-fill in edit/repeat mode
   const [editLoaded, setEditLoaded] = useState(false);
   useEffect(() => {
-    if (!isEditMode || !editQuery.data || editLoaded) return;
+    if (!prefillId || !editQuery.data || editLoaded) return;
     const r = editQuery.data.request as Record<string, unknown>;
     if (!r) return;
 
@@ -123,7 +126,9 @@ export default function CreateDeliveryRequestPage() {
     setCargoType((r.cargo_type as string) ?? "general");
     setSpecialInstructions((r.special_instructions as string) ?? "");
 
-    if (r.consignment_date) {
+    // In repeat mode: clear date/time so user must pick new ones
+    // In edit mode: pre-fill date/time from existing
+    if (!isRepeatMode && r.consignment_date) {
       const d = new Date(r.consignment_date as string);
       setConsignmentDate(d.toISOString().split("T")[0]);
       const h = d.getHours().toString().padStart(2, "0");
@@ -133,7 +138,7 @@ export default function CreateDeliveryRequestPage() {
 
     setAuctionDurationMinutes(String(r.auction_duration_minutes ?? 60));
     setEditLoaded(true);
-  }, [isEditMode, editQuery.data, editLoaded]);
+  }, [prefillId, editQuery.data, editLoaded, isRepeatMode]);
 
   // Consigner search
   const [debouncedConsignerSearch, setDebouncedConsignerSearch] = useState("");
@@ -297,8 +302,8 @@ export default function CreateDeliveryRequestPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={isEditMode ? "Edit Auction" : "Create Delivery Request"}
-        description={isEditMode ? "Modify auction details (only before any bids)" : "Create an auction for drivers to bid on"}
+        title={isEditMode ? "Edit Auction" : isRepeatMode ? "Repeat Auction" : "Create Delivery Request"}
+        description={isEditMode ? "Modify auction details (only before any bids)" : isRepeatMode ? "Create a new auction with pre-filled details from the previous one" : "Create an auction for drivers to bid on"}
       />
 
       <Card>

@@ -11,14 +11,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+// Select removed — using button filters instead
 import { listDeliveryRequests } from "@/lib/api/delivery-requests";
+import { AuctionRowMenu } from "@/components/shared/auction-row-menu";
 import type { AuctionListItem } from "@/lib/api/delivery-requests";
 import { queryKeys } from "@/lib/query/keys";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { VEHICLE_TYPE_LABELS, DELIVERY_REQUEST_STATUS_LABELS } from "@/lib/types";
 import type { DeliveryRequestStatus, VehicleTypeRequired } from "@/lib/types";
 import { Plus, Search, PackagePlus, Loader2, ChevronLeft, ChevronRight, History } from "lucide-react";
+
+const AUCTION_PAGE_STATUSES = ["active", "ended", "winner_selected", "completed"] as const;
+const TERMINAL = new Set(["cancelled", "trip_created", "incomplete"]);
+const prettifyStatus = (s: string) => s === "winner_selected" ? "Winner Selected" : s.charAt(0).toUpperCase() + s.slice(1);
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -51,18 +56,21 @@ export default function DeliveryRequestsPage() {
 
   const erpFilters = useMemo(() => ({
     search: erpDebouncedSearch || undefined,
-    status: erpStatus || "active",
+    status: erpStatus || undefined,
     source: "erp" as const,
     limit: PAGE_SIZE,
     offset: erpOffset,
   }), [erpDebouncedSearch, erpStatus, erpOffset]);
 
+
   const erpQuery = useQuery({
     queryKey: queryKeys.deliveryRequests({ ...erpFilters }),
     queryFn: () => listDeliveryRequests(erpFilters),
   });
-  const erpItems = erpQuery.data?.items ?? [];
-  const erpTotal = erpQuery.data?.total ?? 0;
+  // Filter out terminal statuses (those belong in history)
+  const erpAllItems = erpQuery.data?.items ?? [];
+  const erpItems = erpStatus ? erpAllItems : erpAllItems.filter((i) => !TERMINAL.has(i.status));
+  const erpTotal = erpStatus ? (erpQuery.data?.total ?? 0) : erpItems.length;
 
   // App state
   const [appSearch, setAppSearch] = useState("");
@@ -72,7 +80,7 @@ export default function DeliveryRequestsPage() {
 
   const appFilters = useMemo(() => ({
     search: appDebouncedSearch || undefined,
-    status: appStatus || "active",
+    status: appStatus || undefined,
     source: "app" as const,
     limit: PAGE_SIZE,
     offset: appOffset,
@@ -82,8 +90,9 @@ export default function DeliveryRequestsPage() {
     queryKey: queryKeys.deliveryRequests({ ...appFilters }),
     queryFn: () => listDeliveryRequests(appFilters),
   });
-  const appItems = appQuery.data?.items ?? [];
-  const appTotal = appQuery.data?.total ?? 0;
+  const appAllItems = appQuery.data?.items ?? [];
+  const appItems = appStatus ? appAllItems : appAllItems.filter((i) => !TERMINAL.has(i.status));
+  const appTotal = appStatus ? (appQuery.data?.total ?? 0) : appItems.length;
 
   const erpActive = erpItems.filter((i) => i.status === "active").length;
   const appActive = appItems.filter((i) => i.status === "active").length;
@@ -117,20 +126,20 @@ export default function DeliveryRequestsPage() {
         {/* ERP Tab */}
         <TabsContent value="erp" className="mt-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+            <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input placeholder="Search request #, city, consigner..." value={erpSearch}
                 onChange={(e) => { setErpSearch(e.target.value); setErpOffset(0); setTimeout(() => setErpDebouncedSearch(e.target.value), 300); }}
                 className="pl-9 h-9 text-sm" />
             </div>
-            <Select value={erpStatus || "all"} onValueChange={(v) => { setErpStatus(v === "all" ? "" : v); setErpOffset(0); }}>
-              <SelectTrigger className="w-full sm:w-[160px] h-9 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Active Only</SelectItem>
-                <SelectItem value="ended">Ended</SelectItem>
-                <SelectItem value="winner_selected">Winner Selected</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-1.5">
+              <Button variant={!erpStatus ? "default" : "outline"} size="sm" className="h-9 text-xs"
+                onClick={() => { setErpStatus(""); setErpOffset(0); }}>All</Button>
+              {AUCTION_PAGE_STATUSES.map((s) => (
+                <Button key={s} variant={erpStatus === s ? "default" : "outline"} size="sm" className="h-9 text-xs"
+                  onClick={() => { setErpStatus(s); setErpOffset(0); }}>{prettifyStatus(s)}</Button>
+              ))}
+            </div>
           </div>
 
           <ListState loading={erpQuery.isLoading} error={erpQuery.error} empty={erpItems.length === 0} emptyLabel="No ERP auctions yet" />
@@ -148,6 +157,7 @@ export default function DeliveryRequestsPage() {
                       <th className="px-4 py-3 text-right font-medium text-gray-500">Lowest</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
+                      <th className="px-4 py-3 w-10"></th>
                     </tr></thead>
                     <tbody className="divide-y divide-gray-50">
                       {erpItems.map((item) => (
@@ -169,6 +179,7 @@ export default function DeliveryRequestsPage() {
                           <td className="px-4 py-3 text-right text-gray-700">{item.lowest_bid_amount ? formatCurrency(item.lowest_bid_amount) : "—"}</td>
                           <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
+                          <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -204,20 +215,20 @@ export default function DeliveryRequestsPage() {
         {/* App Tab */}
         <TabsContent value="app" className="mt-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
+            <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input placeholder="Search request #, city..." value={appSearch}
                 onChange={(e) => { setAppSearch(e.target.value); setAppOffset(0); setTimeout(() => setAppDebouncedSearch(e.target.value), 300); }}
                 className="pl-9 h-9 text-sm" />
             </div>
-            <Select value={appStatus || "all"} onValueChange={(v) => { setAppStatus(v === "all" ? "" : v); setAppOffset(0); }}>
-              <SelectTrigger className="w-full sm:w-[160px] h-9 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Active Only</SelectItem>
-                <SelectItem value="ended">Ended</SelectItem>
-                <SelectItem value="winner_selected">Winner Selected</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-1.5">
+              <Button variant={!appStatus ? "default" : "outline"} size="sm" className="h-9 text-xs"
+                onClick={() => { setAppStatus(""); setAppOffset(0); }}>All</Button>
+              {AUCTION_PAGE_STATUSES.map((s) => (
+                <Button key={s} variant={appStatus === s ? "default" : "outline"} size="sm" className="h-9 text-xs"
+                  onClick={() => { setAppStatus(s); setAppOffset(0); }}>{prettifyStatus(s)}</Button>
+              ))}
+            </div>
           </div>
 
           <ListState loading={appQuery.isLoading} error={appQuery.error} empty={appItems.length === 0} emptyLabel="No app auctions found" />
@@ -235,6 +246,7 @@ export default function DeliveryRequestsPage() {
                       <th className="px-4 py-3 text-right font-medium text-gray-500">Lowest</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
+                      <th className="px-4 py-3 w-10"></th>
                     </tr></thead>
                     <tbody className="divide-y divide-gray-50">
                       {appItems.map((item) => (
@@ -254,6 +266,7 @@ export default function DeliveryRequestsPage() {
                           <td className="px-4 py-3 text-right text-gray-700">{item.lowest_bid_amount ? formatCurrency(item.lowest_bid_amount) : "—"}</td>
                           <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
+                          <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
                         </tr>
                       ))}
                     </tbody>

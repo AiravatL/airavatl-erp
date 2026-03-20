@@ -2,269 +2,305 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  useReactTable,
-  getCoreRowModel,
-  flexRender,
-  createColumnHelper,
-} from "@tanstack/react-table";
-import { CreditCard, Search } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis, Area, AreaChart } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
+import { DateRangeFilterBar, createDefaultDateRange, type DateRangeFilters } from "@/components/reports/filter-bar";
 import { PageHeader } from "@/components/shared/page-header";
 import { KpiCard } from "@/components/reports/kpi-card";
-import { CsvExportButton, type CsvColumn } from "@/components/reports/csv-export-button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { formatDate, formatCurrency } from "@/lib/formatters";
-import {
-  listPayments, listPayouts,
-  type PaymentItem, type PayoutItem,
-  type PaymentFilters, type PayoutFilters,
-} from "@/lib/api/app-reports";
-import { queryKeys } from "@/lib/query/keys";
-import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
+import { formatCurrency } from "@/lib/formatters";
+import { apiRequest } from "@/lib/api/http";
+import { TrendingUp, DollarSign, CreditCard, Loader2, ArrowUpRight, ArrowDownRight, Percent } from "lucide-react";
 
-/* ---------- Payments columns ---------- */
+interface FinancialAnalytics {
+  summary: {
+    total_trips: number;
+    total_consigner_amount: number;
+    total_driver_payable: number;
+    total_platform_revenue: number;
+    avg_revenue_per_trip: number;
+    avg_trip_value: number;
+    revenue_margin_pct: number;
+  };
+  collections: {
+    total_collected: number;
+    advance_collected: number;
+    final_collected: number;
+    total_pending: number;
+    completed_payments: number;
+    pending_payments: number;
+    failed_payments: number;
+    total_billed: number;
+    collection_rate: number;
+    uncollected: number;
+  };
+  monthly_trend: Array<{ month: string; trips: number; consigner_total: number; driver_total: number; revenue: number }>;
+  daily_trend: Array<{ date: string; trips: number; consigner_total: number; driver_total: number; revenue: number }>;
+  status_breakdown: Array<{ status: string; count: number; amount: number }>;
+  source_breakdown: Array<{ source: string; trips: number; consigner_total: number; revenue: number }>;
+  top_trips: Array<{ trip_number: string; consigner_amount: number; driver_bid: number; platform_revenue: number; trip_status: string; trip_date: string }>;
+}
 
-const payCol = createColumnHelper<PaymentItem>();
-const paymentColumns = [
-  payCol.accessor("tripNumber", { header: "Trip #", cell: (i) => <span className="font-medium text-gray-900">{i.getValue()}</span> }),
-  payCol.accessor("paymentType", { header: "Type", cell: (i) => prettify(i.getValue()) }),
-  payCol.accessor("amount", { header: "Amount", cell: (i) => formatCurrency(i.getValue()) }),
-  payCol.accessor("method", { header: "Method", cell: (i) => i.getValue() ?? <span className="text-gray-300">—</span> }),
-  payCol.accessor("status", { header: "Status", cell: (i) => <PaymentStatusBadge status={i.getValue()} /> }),
-  payCol.accessor("razorpayPaymentId", { header: "Razorpay ID", cell: (i) => <span className="text-xs text-gray-500 font-mono">{i.getValue() ?? "—"}</span> }),
-  payCol.accessor("consignerName", { header: "Consigner", cell: (i) => i.getValue() ?? "—" }),
-  payCol.accessor("createdAt", { header: "Date", cell: (i) => <span className="text-gray-500 text-xs">{formatDate(i.getValue())}</span> }),
-];
+const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+const revenueConfig = { revenue: { label: "Revenue", color: "#10b981" }, consigner_total: { label: "Consigner", color: "#3b82f6" }, driver_total: { label: "Driver", color: "#f59e0b" } } satisfies ChartConfig;
+const areaConfig = { revenue: { label: "Revenue", color: "#10b981" } } satisfies ChartConfig;
+const pieConfig = { value: { label: "Amount", color: "#6366f1" } } satisfies ChartConfig;
 
-const paymentCsvCols: CsvColumn<PaymentItem>[] = [
-  { key: "tripNumber", header: "Trip #", value: (r) => r.tripNumber },
-  { key: "paymentType", header: "Type", value: (r) => r.paymentType },
-  { key: "amount", header: "Amount", value: (r) => r.amount },
-  { key: "method", header: "Method", value: (r) => r.method },
-  { key: "status", header: "Status", value: (r) => r.status },
-  { key: "razorpayPaymentId", header: "Razorpay ID", value: (r) => r.razorpayPaymentId },
-  { key: "consignerName", header: "Consigner", value: (r) => r.consignerName },
-  { key: "driverName", header: "Driver", value: (r) => r.driverName },
-  { key: "createdAt", header: "Date", value: (r) => r.createdAt },
-];
-
-/* ---------- Payouts columns ---------- */
-
-const poCol = createColumnHelper<PayoutItem>();
-const payoutColumns = [
-  poCol.accessor("tripNumber", { header: "Trip #", cell: (i) => <span className="font-medium text-gray-900">{i.getValue()}</span> }),
-  poCol.accessor("driverName", { header: "Driver" }),
-  poCol.accessor("payoutType", { header: "Type", cell: (i) => prettify(i.getValue()) }),
-  poCol.accessor("amount", { header: "Amount", cell: (i) => formatCurrency(i.getValue()) }),
-  poCol.accessor("status", { header: "Status", cell: (i) => <PayoutStatusBadge status={i.getValue()} /> }),
-  poCol.accessor("utr", { header: "UTR", cell: (i) => <span className="text-xs text-gray-500 font-mono">{i.getValue() ?? "—"}</span> }),
-  poCol.accessor("razorpayStatus", { header: "RZP Status", cell: (i) => i.getValue() ?? "—" }),
-  poCol.accessor("createdAt", { header: "Date", cell: (i) => <span className="text-gray-500 text-xs">{formatDate(i.getValue())}</span> }),
-];
-
-const payoutCsvCols: CsvColumn<PayoutItem>[] = [
-  { key: "tripNumber", header: "Trip #", value: (r) => r.tripNumber },
-  { key: "driverName", header: "Driver", value: (r) => r.driverName },
-  { key: "payoutType", header: "Type", value: (r) => r.payoutType },
-  { key: "amount", header: "Amount", value: (r) => r.amount },
-  { key: "status", header: "Status", value: (r) => r.status },
-  { key: "utr", header: "UTR", value: (r) => r.utr },
-  { key: "razorpayStatus", header: "RZP Status", value: (r) => r.razorpayStatus },
-  { key: "createdAt", header: "Date", value: (r) => r.createdAt },
-];
+function prettify(s: string) { return s.split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" "); }
 
 export default function FinancialReportPage() {
-  const [tab, setTab] = useState<"payments" | "payouts">("payments");
-  const [payFilters, setPayFilters] = useState<PaymentFilters>({ limit: 100 });
-  const [poFilters, setPoFilters] = useState<PayoutFilters>({ limit: 100 });
-
-  const paymentsQuery = useQuery({
-    queryKey: queryKeys.appPayments(payFilters),
-    queryFn: () => listPayments(payFilters),
-  });
-  const payoutsQuery = useQuery({
-    queryKey: queryKeys.appPayouts(poFilters),
-    queryFn: () => listPayouts(poFilters),
+  const [filters, setFilters] = useState<DateRangeFilters>(() => {
+    const d = createDefaultDateRange();
+    // Default to 90 days for financial view
+    const from = new Date();
+    from.setDate(from.getDate() - 89);
+    return { from: from.toISOString().split("T")[0], to: d.to };
   });
 
-  const payments = paymentsQuery.data?.items ?? [];
-  const payouts = payoutsQuery.data?.items ?? [];
+  const query = useQuery({
+    queryKey: ["reports", "financial-analytics", filters],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filters.from) params.set("from", filters.from);
+      if (filters.to) params.set("to", filters.to);
+      return apiRequest<FinancialAnalytics>(`/api/reports/financial-analytics?${params}`);
+    },
+  });
 
-  const paymentTable = useReactTable({ data: payments, columns: paymentColumns, getCoreRowModel: getCoreRowModel() });
-  const payoutTable = useReactTable({ data: payouts, columns: payoutColumns, getCoreRowModel: getCoreRowModel() });
-
-  const payTotal = paymentsQuery.data?.total ?? 0;
-  const payVolume = payments.reduce((s, p) => s + p.amount, 0);
-  const payCompleted = payments.filter((p) => p.status === "completed").length;
-
-  const poTotal = payoutsQuery.data?.total ?? 0;
-  const poVolume = payouts.reduce((s, p) => s + p.amount, 0);
-  const poProcessed = payouts.filter((p) => p.status === "processed").length;
+  const data = query.data;
+  const s = data?.summary;
+  const c = data?.collections;
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
-      <PageHeader title="Financial Analytics" description="Payments and driver payouts" />
+      <PageHeader title="Financial Analytics" description="Revenue, collections, and trip economics" />
+      <DateRangeFilterBar filters={filters} onChange={setFilters} />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "payments" | "payouts")}>
-        <TabsList className="bg-gray-100 h-8">
-          <TabsTrigger value="payments" className="text-xs h-7 data-[state=active]:bg-white">Payments</TabsTrigger>
-          <TabsTrigger value="payouts" className="text-xs h-7 data-[state=active]:bg-white">Payouts</TabsTrigger>
-        </TabsList>
+      {query.isLoading ? (
+        <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+      ) : query.isError ? (
+        <Card><CardContent className="p-4 text-sm text-red-600">{query.error instanceof Error ? query.error.message : "Error"}</CardContent></Card>
+      ) : !data || !s ? (
+        <Card><CardContent className="p-6 text-center text-sm text-gray-500">No financial data for selected period</CardContent></Card>
+      ) : (
+        <>
+          {/* Revenue KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <KpiCard label="Platform Revenue" value={formatCurrency(s.total_platform_revenue)} helper={`${s.revenue_margin_pct}% margin`} />
+            <KpiCard label="Consigner Billed" value={formatCurrency(s.total_consigner_amount)} helper={`${s.total_trips} trips`} />
+            <KpiCard label="Driver Payable" value={formatCurrency(s.total_driver_payable)} />
+            <KpiCard label="Avg Revenue/Trip" value={formatCurrency(s.avg_revenue_per_trip)} helper={`Avg trip: ${formatCurrency(s.avg_trip_value)}`} />
+          </div>
 
-        {/* Payments Tab */}
-        <TabsContent value="payments" className="mt-4 space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative max-w-xs">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                <Input
-                  placeholder="Search..."
-                  value={payFilters.search ?? ""}
-                  onChange={(e) => setPayFilters((f) => ({ ...f, search: e.target.value || undefined, offset: 0 }))}
-                  className="h-8 pl-8 text-sm"
-                  maxLength={FIELD_LIMITS.search}
-                />
-              </div>
-              <Select value={payFilters.status ?? "all"} onValueChange={(v) => setPayFilters((f) => ({ ...f, status: v === "all" ? undefined : v, offset: 0 }))}>
-                <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                  <SelectItem value="refunded">Refunded</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={payFilters.paymentType ?? "all"} onValueChange={(v) => setPayFilters((f) => ({ ...f, paymentType: v === "all" ? undefined : v, offset: 0 }))}>
-                <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="advance">Advance</SelectItem>
-                  <SelectItem value="balance">Balance</SelectItem>
-                  <SelectItem value="full">Full</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Collection KPIs */}
+          {c && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <KpiCard label="Total Collected" value={formatCurrency(c.total_collected)} helper={`${c.completed_payments} payments`} />
+              <KpiCard label="Advance Collected" value={formatCurrency(c.advance_collected)} />
+              <KpiCard label="Balance Collected" value={formatCurrency(c.final_collected)} />
+              <KpiCard label="Collection Rate" value={`${c.collection_rate}%`}
+                helper={c.uncollected > 0 ? `${formatCurrency(c.uncollected)} uncollected` : "Fully collected"} />
             </div>
-            <CsvExportButton fileName="payments-report.csv" rows={payments} columns={paymentCsvCols} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiCard label="Total Payments" value={payTotal.toLocaleString("en-IN")} />
-            <KpiCard label="Volume" value={formatCurrency(payVolume)} />
-            <KpiCard label="Completed" value={payCompleted.toLocaleString("en-IN")} />
-            <KpiCard label="Failed" value={payments.filter((p) => p.status === "failed").length.toLocaleString("en-IN")} />
-          </div>
-
-          <QueryState query={paymentsQuery} icon={CreditCard} emptyLabel="No payments found." />
-          {payments.length > 0 && (
-            <Card><CardContent className="p-0"><DataTable table={paymentTable} /></CardContent></Card>
           )}
-        </TabsContent>
 
-        {/* Payouts Tab */}
-        <TabsContent value="payouts" className="mt-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <Select value={poFilters.status ?? "all"} onValueChange={(v) => setPoFilters((f) => ({ ...f, status: v === "all" ? undefined : v, offset: 0 }))}>
-              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="processing">Processing</SelectItem>
-                <SelectItem value="processed">Processed</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-            <CsvExportButton fileName="payouts-report.csv" rows={payouts} columns={payoutCsvCols} />
+          {/* Charts Row 1: Revenue Trend + Revenue Breakdown */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Revenue Area Chart */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-emerald-600" /> Revenue Trend
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.daily_trend.length > 0 ? (
+                  <ChartContainer config={areaConfig} className="h-[250px]">
+                    <AreaChart data={data.daily_trend} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={10}
+                        tickFormatter={(v) => new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })} />
+                      <YAxis tickLine={false} axisLine={false} fontSize={10}
+                        tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                      <ChartTooltip content={<ChartTooltipContent formatter={(v) => formatCurrency(Number(v))} />} />
+                      <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} fill="url(#revGradient)" />
+                    </AreaChart>
+                  </ChartContainer>
+                ) : (
+                  <p className="text-sm text-gray-400 text-center py-10">No daily data</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Money Flow Breakdown */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-gray-500" /> Money Flow
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <FlowBar label="Consigner Billed" amount={s.total_consigner_amount} total={s.total_consigner_amount} color="bg-blue-500" />
+                  <FlowBar label="Driver Payable" amount={s.total_driver_payable} total={s.total_consigner_amount} color="bg-amber-500" />
+                  <FlowBar label="Platform Revenue" amount={s.total_platform_revenue} total={s.total_consigner_amount} color="bg-emerald-500" />
+                  <div className="pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Revenue Margin</span>
+                      <span className="text-lg font-bold text-emerald-700">{s.revenue_margin_pct}%</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiCard label="Total Payouts" value={poTotal.toLocaleString("en-IN")} />
-            <KpiCard label="Volume" value={formatCurrency(poVolume)} />
-            <KpiCard label="Processed" value={poProcessed.toLocaleString("en-IN")} />
-            <KpiCard label="Pending" value={payouts.filter((p) => p.status === "pending").length.toLocaleString("en-IN")} />
+          {/* Charts Row 2: Monthly Bar + Source + Status */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Monthly Revenue Bar Chart */}
+            {data.monthly_trend.length > 0 && (
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Monthly Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={revenueConfig} className="h-[220px]">
+                    <BarChart data={data.monthly_trend} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
+                      <YAxis tickLine={false} axisLine={false} fontSize={10} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                      <ChartTooltip content={<ChartTooltipContent formatter={(v) => formatCurrency(Number(v))} />} />
+                      <ChartLegend content={<ChartLegendContent />} />
+                      <Bar dataKey="consigner_total" fill="var(--color-consigner_total)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="driver_total" fill="var(--color-driver_total)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Source Breakdown */}
+            {data.source_breakdown.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Revenue by Source</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer config={pieConfig} className="h-[180px]">
+                    <PieChart>
+                      <ChartTooltip content={<ChartTooltipContent formatter={(v) => formatCurrency(Number(v))} />} />
+                      <Pie data={data.source_breakdown.map((s, i) => ({ ...s, name: s.source, value: s.revenue, fill: PIE_COLORS[i] }))}
+                        dataKey="value" nameKey="name" innerRadius={45} outerRadius={70} paddingAngle={3}>
+                        {data.source_breakdown.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
+                      </Pie>
+                    </PieChart>
+                  </ChartContainer>
+                  <div className="space-y-1.5 mt-2">
+                    {data.source_breakdown.map((s, i) => (
+                      <div key={s.source} className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 text-gray-600">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[i] }} />
+                          {s.source}
+                        </span>
+                        <span className="font-medium text-gray-900">{formatCurrency(s.revenue)} ({s.trips} trips)</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          <QueryState query={payoutsQuery} icon={CreditCard} emptyLabel="No payouts found." />
-          {payouts.length > 0 && (
-            <Card><CardContent className="p-0"><DataTable table={payoutTable} /></CardContent></Card>
+          {/* Top Earning Trips Table */}
+          {data.top_trips.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Top Revenue Trips</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50/50">
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Trip</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">Consigner Paid</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">Driver Bid</th>
+                      <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">Revenue</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {data.top_trips.map((t) => {
+                      const marginPct = t.consigner_amount > 0 ? ((t.platform_revenue / t.consigner_amount) * 100).toFixed(1) : "0";
+                      return (
+                        <tr key={t.trip_number} className="hover:bg-gray-50/50">
+                          <td className="px-4 py-3">
+                            <span className="font-medium text-gray-900">{t.trip_number}</span>
+                            <span className="text-[11px] text-gray-400 ml-2">{t.trip_date}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(t.consigner_amount)}</td>
+                          <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(t.driver_bid)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-semibold text-emerald-700">{formatCurrency(t.platform_revenue)}</span>
+                            <span className="text-[11px] text-gray-400 ml-1">({marginPct}%)</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className="border-0 text-[10px] bg-gray-100 text-gray-600">
+                              {prettify(t.trip_status)}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
           )}
-        </TabsContent>
-      </Tabs>
+
+          {/* Trip Status Breakdown */}
+          {data.status_breakdown.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Trip Value by Status</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {data.status_breakdown.map((sb) => (
+                    <div key={sb.status} className="rounded-lg bg-gray-50 p-3">
+                      <p className="text-[11px] text-gray-400 uppercase">{prettify(sb.status)}</p>
+                      <p className="text-lg font-semibold text-gray-900 mt-0.5">{sb.count}</p>
+                      <p className="text-xs text-gray-500">{formatCurrency(sb.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-/* ---------- Shared ---------- */
-
-function prettify(value: string) {
-  return value.split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
-}
-
-function PaymentStatusBadge({ status }: { status: string }) {
-  const colorMap: Record<string, string> = {
-    pending: "bg-amber-50 text-amber-700",
-    completed: "bg-emerald-50 text-emerald-700",
-    failed: "bg-red-50 text-red-700",
-    refunded: "bg-purple-50 text-purple-700",
-  };
-  return <Badge variant="outline" className={`text-[10px] border-0 ${colorMap[status] ?? "bg-gray-100 text-gray-600"}`}>{prettify(status)}</Badge>;
-}
-
-function PayoutStatusBadge({ status }: { status: string }) {
-  const colorMap: Record<string, string> = {
-    pending: "bg-amber-50 text-amber-700",
-    processing: "bg-blue-50 text-blue-700",
-    processed: "bg-emerald-50 text-emerald-700",
-    failed: "bg-red-50 text-red-700",
-  };
-  return <Badge variant="outline" className={`text-[10px] border-0 ${colorMap[status] ?? "bg-gray-100 text-gray-600"}`}>{prettify(status)}</Badge>;
-}
-
-function DataTable<T>({ table }: { table: ReturnType<typeof useReactTable<T>> }) {
+function FlowBar({ label, amount, total, color }: { label: string; amount: number; total: number; color: string }) {
+  const pct = total > 0 ? (amount / total) * 100 : 0;
   return (
-    <Table>
-      <TableHeader>
-        {table.getHeaderGroups().map((hg) => (
-          <TableRow key={hg.id} className="border-b border-gray-100 bg-gray-50/50">
-            {hg.headers.map((h) => (
-              <TableHead key={h.id} className="px-4 py-2.5 text-xs font-medium text-gray-500">
-                {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {table.getRowModel().rows.map((row) => (
-          <TableRow key={row.id} className="hover:bg-gray-50/50 transition-colors border-gray-50">
-            {row.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id} className="px-4 py-3 text-sm">
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-gray-600">{label}</span>
+        <span className="text-sm font-medium text-gray-900">{formatCurrency(amount)}</span>
+      </div>
+      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-[11px] text-gray-400 mt-0.5">{pct.toFixed(1)}% of total</p>
+    </div>
   );
-}
-
-function QueryState({
-  query, icon: Icon, emptyLabel,
-}: {
-  query: { isLoading: boolean; isError: boolean; error: unknown; data?: { items: unknown[] } };
-  icon: React.ComponentType<{ className?: string }>;
-  emptyLabel: string;
-}) {
-  if (query.isLoading) return <Card><CardContent className="p-4 text-sm text-gray-500">Loading...</CardContent></Card>;
-  if (query.isError) return <Card><CardContent className="p-4 text-sm text-red-600">{query.error instanceof Error ? query.error.message : "Error"}</CardContent></Card>;
-  if (query.data && query.data.items.length === 0) {
-    return <Card><CardContent className="p-6 text-center"><Icon className="h-8 w-8 text-gray-300 mx-auto mb-2" /><p className="text-sm text-gray-500">{emptyLabel}</p></CardContent></Card>;
-  }
-  return null;
 }

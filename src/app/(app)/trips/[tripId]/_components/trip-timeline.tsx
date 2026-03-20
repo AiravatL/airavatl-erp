@@ -14,9 +14,10 @@ interface TimelineStep {
 interface TripTimelineProps {
   trip: Record<string, unknown>;
   currentStatus: AppTripStatus;
+  isErp?: boolean;
 }
 
-const TIMELINE_FIELDS: { status: AppTripStatus; field: string }[] = [
+const BASE_TIMELINE: { status: AppTripStatus; field: string }[] = [
   { status: "waiting_driver_acceptance", field: "created_at" },
   { status: "driver_assigned", field: "driver_assigned_at" },
   { status: "en_route_to_pickup", field: "en_route_to_pickup_at" },
@@ -28,14 +29,30 @@ const TIMELINE_FIELDS: { status: AppTripStatus; field: string }[] = [
   { status: "completed", field: "completed_at" },
 ];
 
-export function TripTimeline({ trip, currentStatus }: TripTimelineProps) {
-  const steps: TimelineStep[] = TIMELINE_FIELDS.map(({ status, field }) => ({
+const ERP_TIMELINE: { status: AppTripStatus; field: string }[] = [
+  { status: "waiting_driver_acceptance", field: "created_at" },
+  { status: "driver_assigned", field: "driver_assigned_at" },
+  { status: "en_route_to_pickup", field: "en_route_to_pickup_at" },
+  { status: "at_pickup", field: "at_pickup_at" },
+  { status: "loading", field: "loading_at" },
+  { status: "waiting_for_advance", field: "advance_paid_at" },
+  { status: "in_transit", field: "in_transit_at" },
+  { status: "at_delivery", field: "at_delivery_at" },
+  { status: "unloading", field: "unloading_at" },
+  { status: "waiting_for_final", field: "final_paid_at" },
+  { status: "completed", field: "completed_at" },
+];
+
+export function TripTimeline({ trip, currentStatus, isErp }: TripTimelineProps) {
+  const timelineFields = isErp ? ERP_TIMELINE : BASE_TIMELINE;
+
+  const steps: TimelineStep[] = timelineFields.map(({ status, field }) => ({
     status,
     label: APP_TRIP_STATUS_LABELS[status] ?? status,
     timestamp: (trip[field] as string) ?? null,
   }));
 
-  const currentIndex = TIMELINE_FIELDS.findIndex(
+  const currentIndex = timelineFields.findIndex(
     (f) => f.status === currentStatus,
   );
 

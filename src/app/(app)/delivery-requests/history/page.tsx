@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { listDeliveryRequests } from "@/lib/api/delivery-requests";
+import { AuctionRowMenu } from "@/components/shared/auction-row-menu";
 import type { AuctionListItem } from "@/lib/api/delivery-requests";
 import { queryKeys } from "@/lib/query/keys";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -27,7 +28,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function prettify(s: string) { return s.split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" "); }
 
-const TERMINAL_STATUSES = ["completed", "cancelled", "trip_created"] as const;
+const TERMINAL_STATUSES = ["cancelled", "trip_created", "incomplete"] as const;
 const PAGE_SIZE = 50;
 
 export default function AuctionHistoryPage() {
@@ -127,6 +128,7 @@ function HistoryTab({ source }: { source: "erp" | "app" }) {
                   <th className="px-4 py-3 text-right font-medium text-gray-500">Lowest</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
+                  <th className="px-4 py-3 w-10"></th>
                 </tr></thead>
                 <tbody className="divide-y divide-gray-50">
                   {items.map((item) => (
@@ -145,6 +147,7 @@ function HistoryTab({ source }: { source: "erp" | "app" }) {
                       <td className="px-4 py-3 text-right text-gray-700">{item.lowest_bid_amount ? formatCurrency(item.lowest_bid_amount) : "—"}</td>
                       <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
+                      <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
                     </tr>
                   ))}
                 </tbody>

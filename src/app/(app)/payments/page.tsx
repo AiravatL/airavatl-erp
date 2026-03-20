@@ -13,7 +13,6 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query/keys";
 import {
-  getPaymentObjectViewUrl,
   listPaymentQueue,
   type PaymentQueueItem,
 } from "@/lib/api/payments";
@@ -26,10 +25,13 @@ type PaymentQueueTab = "pending-payments" | "paid-history";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
+  processing: "Processing",
   approved: "Approved",
   on_hold: "On Hold",
   rejected: "Rejected",
   paid: "Paid",
+  completed: "Paid",
+  failed: "Failed",
 };
 
 function maskAccountNumber(accountNumber: string | null) {
@@ -39,7 +41,15 @@ function maskAccountNumber(accountNumber: string | null) {
 }
 
 function isActionable(payment: PaymentQueueItem) {
-  return payment.status === "pending" || payment.status === "approved";
+  return payment.status === "pending" || payment.status === "approved" || payment.status === "processing";
+}
+
+function isPaid(payment: PaymentQueueItem) {
+  return payment.status === "paid" || payment.status === "completed";
+}
+
+function isErpPayment(payment: PaymentQueueItem) {
+  return payment.paymentMethod === "bank_transfer";
 }
 
 function QueueCard({
@@ -51,8 +61,9 @@ function QueueCard({
   canMarkPaid: boolean;
   onMarkPaid: (payment: PaymentQueueItem) => void;
 }) {
-  const showBankDetails = payment.paymentMethod === "bank";
+  const showBankDetails = payment.paymentMethod === "bank" || payment.paymentMethod === "bank_transfer";
   const showUpiDetails = payment.paymentMethod === "upi";
+  const erp = isErpPayment(payment);
 
   return (
     <Card>
@@ -64,51 +75,74 @@ function QueueCard({
               <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600 capitalize">
                 {payment.type.replace("_", " ")}
               </span>
+              {erp && (
+                <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-600 font-medium">
+                  ERP
+                </span>
+              )}
             </div>
-            <p className="text-xs text-gray-500">Beneficiary: {payment.beneficiary || "N/A"}</p>
-            <p className="text-xs text-gray-500">Trip Amount: {formatCurrency(payment.tripAmount ?? 0)}</p>
+            <p className="text-xs text-gray-500">Pay to: <span className="font-medium text-gray-900">{payment.beneficiary || "N/A"}</span></p>
           </div>
 
           <div className="text-right">
             <p className="text-sm font-semibold text-gray-900">{formatCurrency(payment.amount)}</p>
             <StatusBadge
-              status={payment.status}
+              status={payment.status === "completed" ? "paid" : payment.status}
               label={STATUS_LABELS[payment.status] ?? payment.status}
               variant="payment"
             />
           </div>
         </div>
 
-        <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-          <p>
-            Method: <span className="font-medium text-gray-900 uppercase">{payment.paymentMethod ?? "N/A"}</span>
-          </p>
-          <p>
-            Requested by: <span className="font-medium text-gray-900">{payment.requestedByName || "Unknown"}</span>
-          </p>
+        {/* Payment Details */}
+        <div className="rounded-md bg-gray-50 p-2.5 mb-2 space-y-1.5">
           {showBankDetails && (
-            <p>
-              Bank: <span className="font-medium text-gray-900">{payment.bankName || "N/A"}</span>
-            </p>
+            <>
+              {payment.bankAccountHolder && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Account Holder</span>
+                  <span className="font-medium text-gray-900">{payment.bankAccountHolder}</span>
+                </div>
+              )}
+              {payment.bankAccountNumber && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Account Number</span>
+                  <span className="font-medium text-gray-900">{payment.bankAccountNumber}</span>
+                </div>
+              )}
+              {payment.bankIfsc && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">IFSC Code</span>
+                  <span className="font-medium text-gray-900">{payment.bankIfsc}</span>
+                </div>
+              )}
+              {payment.bankName && payment.bankName !== "" && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">Bank</span>
+                  <span className="font-medium text-gray-900">{payment.bankName}</span>
+                </div>
+              )}
+              {!payment.bankAccountNumber && !payment.bankAccountHolder && (
+                <p className="text-xs text-amber-600">Bank details not available</p>
+              )}
+            </>
           )}
-          {showBankDetails && (
-            <p>
-              A/C: <span className="font-medium text-gray-900">{maskAccountNumber(payment.bankAccountNumber)}</span>
-            </p>
+          {showUpiDetails && (
+            <>
+              {payment.upiId ? (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">UPI ID</span>
+                  <span className="font-medium text-gray-900">{payment.upiId}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-600">UPI details not available</p>
+              )}
+            </>
           )}
-          {showUpiDetails && payment.upiId && (
-            <p>
-              UPI ID: <span className="font-medium text-gray-900">{payment.upiId}</span>
-            </p>
-          )}
-          <p>
-            Requested On: <span className="font-medium text-gray-900">{formatDate(payment.createdAt)}</span>
-          </p>
-          {payment.reviewedAt && (
-            <p>
-              Reviewed On: <span className="font-medium text-gray-900">{formatDate(payment.reviewedAt)}</span>
-            </p>
-          )}
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Created</span>
+            <span className="text-gray-700">{formatDate(payment.createdAt)}</span>
+          </div>
         </div>
 
         {payment.upiQrObjectKey && (
@@ -119,19 +153,19 @@ function QueueCard({
           <SignedImagePreview objectKey={payment.paidProofObjectKey} label="Payment Proof" />
         )}
 
-        <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-2">
-          <p className="text-[11px] text-gray-400">{payment.notes || "No notes"}</p>
-          {canMarkPaid && isActionable(payment) && (
+        {canMarkPaid && isActionable(payment) && (
+          <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+            <p className="text-[11px] text-gray-400">{payment.notes || ""}</p>
             <Button
               size="sm"
               className="h-7 gap-1 text-[11px]"
               onClick={() => onMarkPaid(payment)}
             >
               <Upload className="h-3 w-3" />
-              Upload Proof + Mark Paid
+              Upload Proof &amp; Mark Paid
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -168,16 +202,17 @@ export default function PaymentsPage() {
     [pendingPayments],
   );
   const pendingFinalCount = useMemo(
-    () => pendingPayments.filter((payment) => payment.type === "balance").length,
+    () => pendingPayments.filter((payment) => payment.type === "final" || payment.type === "balance").length,
     [pendingPayments],
   );
   const paidHistory = useMemo(
     () =>
       queue
-        .filter((payment) => payment.status === "paid")
+        .filter((payment) => isPaid(payment))
         .sort((a, b) => new Date(b.reviewedAt ?? b.createdAt).getTime() - new Date(a.reviewedAt ?? a.createdAt).getTime()),
     [queue],
   );
+
 
   const activeList = activeTab === "pending-payments" ? pendingPayments : paidHistory;
 

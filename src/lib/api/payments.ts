@@ -4,8 +4,8 @@ import {
   setCachedObjectViewUrl,
 } from "@/lib/cache/object-view-url-cache";
 
-export type PaymentRequestType = "advance" | "balance" | "other" | "vendor_settlement";
-export type PaymentRequestStatus = "pending" | "approved" | "on_hold" | "rejected" | "paid";
+export type PaymentRequestType = "advance" | "final" | "balance" | "other" | "vendor_settlement";
+export type PaymentRequestStatus = "pending" | "processing" | "completed" | "failed" | "approved" | "on_hold" | "rejected" | "paid";
 
 export interface PaymentQueueItem {
   id: string;
@@ -18,7 +18,7 @@ export interface PaymentQueueItem {
   paidAmount: number | null;
   tripAmount: number | null;
   beneficiary: string;
-  paymentMethod: "bank" | "upi" | null;
+  paymentMethod: "bank" | "upi" | "bank_transfer" | null;
   bankAccountHolder: string | null;
   bankAccountNumber: string | null;
   bankIfsc: string | null;
@@ -48,6 +48,26 @@ export interface PreparedUpload {
   uploadUrl: string;
   objectKey: string;
   expiresIn: number | null;
+}
+
+export type PaymentProofUploadStatus =
+  | "prepared"
+  | "uploaded"
+  | "attached"
+  | "expired"
+  | "missing";
+
+export type PaymentProofUploadSource = "draft" | "final" | "none";
+
+export interface PaymentProofUploadSummary {
+  status: PaymentProofUploadStatus;
+  objectKey: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  uploadedAt: string | null;
+  attachedAt: string | null;
+  source: PaymentProofUploadSource;
 }
 
 function buildQuery(filters: ListPaymentQueueFilters = {}) {
@@ -83,13 +103,35 @@ export async function preparePaymentProofUpload(
   });
 }
 
-export async function markPaymentRequestPaid(
+export async function confirmPaymentProofUpload(
   paymentRequestId: string,
   input: {
     objectKey: string;
     fileName: string;
     mimeType: string;
     fileSizeBytes: number;
+  },
+): Promise<{ objectKey: string; uploadedAt: string | null; status: string | null }> {
+  return apiRequest(`/api/payments/${paymentRequestId}/proof/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getPaymentProofUpload(
+  paymentRequestId: string,
+): Promise<PaymentProofUploadSummary> {
+  return apiRequest(`/api/payments/${paymentRequestId}/proof`, {
+    method: "GET",
+    cache: "no-store",
+  });
+}
+
+export async function markPaymentRequestPaid(
+  paymentRequestId: string,
+  input: {
+    objectKey?: string;
     paymentReference?: string;
     paidAmount?: number;
     notes?: string;
@@ -106,6 +148,17 @@ export async function markPaymentRequestPaid(
     status: string;
     type: string;
   }>(`/api/payments/${paymentRequestId}/mark-paid`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function markErpPaymentPaid(
+  paymentId: string,
+  input: { paymentReference?: string; notes?: string },
+): Promise<{ success: boolean; trip_id: string; trip_number: string; new_trip_status: string }> {
+  return apiRequest(`/api/payments/${paymentId}/mark-paid`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

@@ -1,9 +1,11 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   getAuctionTrip,
@@ -24,10 +26,11 @@ import { formatCurrency, formatDate, formatRelativeTime } from "@/lib/formatters
 import {
   ArrowLeft, Loader2, MapPin, Truck, Phone, User, Package,
   Route, DollarSign, Clock, ExternalLink, AlertTriangle,
-  CircleDot, XCircle, Camera,
+  CircleDot, XCircle, Camera, Trash2,
 } from "lucide-react";
 import { TripTimeline } from "./_components/trip-timeline";
 import { SignedImagePreview } from "@/components/shared/signed-image-preview";
+import { AdminDeleteDialog } from "@/components/shared/admin-delete-dialog";
 import dynamic from "next/dynamic";
 
 const TripMap = dynamic(() => import("@/components/shared/trip-map").then((m) => ({ default: m.TripMap })), { ssr: false });
@@ -42,6 +45,8 @@ const STATUS_COLORS: Record<AppTripStatus, string> = {
   in_transit: "bg-purple-100 text-purple-800",
   at_delivery: "bg-purple-100 text-purple-800",
   unloading: "bg-violet-100 text-violet-800",
+  waiting_for_advance: "bg-amber-100 text-amber-700",
+  waiting_for_final: "bg-amber-100 text-amber-700",
   completed: "bg-emerald-100 text-emerald-800",
   cancelled: "bg-red-100 text-red-800",
   driver_rejected: "bg-red-100 text-red-800",
@@ -55,8 +60,11 @@ const ACTIVE_TRACKING_STATUSES = new Set<AppTripStatus>([
 
 export default function TripDetailPage({ params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = use(params);
+  const router = useRouter();
   const { user } = useAuth();
   const isOps = user ? OPS_ROLES.has(user.role) : false;
+  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const tripQuery = useQuery({
     queryKey: queryKeys.trip(tripId),
@@ -164,12 +172,20 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
               )}
             </div>
           </div>
-          {data.request_id && (
-            <Link href={`/delivery-requests/${data.request_id}`}
-              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0">
-              {data.request_number ?? "View Auction"} <ExternalLink className="h-3 w-3" />
-            </Link>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {data.request_id && (
+              <Link href={`/delivery-requests/${data.request_id}`}
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                {data.request_number ?? "View Auction"} <ExternalLink className="h-3 w-3" />
+              </Link>
+            )}
+            {isAdmin && (
+              <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => setDeleteDialogOpen(true)}>
+                <Trash2 className="h-3 w-3 mr-1" /> Delete
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -311,7 +327,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
           </Card>
 
           {/* Timeline */}
-          <TripTimeline trip={trip} currentStatus={status!} />
+          <TripTimeline trip={trip} currentStatus={status!} isErp={isErpTrip} />
         </div>
 
         {/* Right Column — Driver + Financial + Metadata */}
@@ -450,7 +466,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                   </>
                 )}
 
-                {paymentSummaryQuery.data && (
+                {!isErpTrip && paymentSummaryQuery.data && (
                   <div className="pt-2 border-t border-gray-100 space-y-1.5">
                     <p className="text-[11px] text-gray-400 uppercase">Consigner Payments (Collected)</p>
                     <FinRow label="Advance Collected" value={formatCurrency(paymentSummaryQuery.data.paidAdvanceTotal)} />
@@ -497,6 +513,19 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
           </Card>
         </div>
       </div>
+
+      {/* Admin Delete Dialog */}
+      <AdminDeleteDialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onDeleted={() => {
+          router.push("/trips");
+        }}
+        type="trip"
+        id={tripId}
+        label={trip.trip_number as string}
+        description={`Status: ${statusLabel} · All payments, proofs, and ratings will be deleted`}
+      />
     </div>
   );
 }

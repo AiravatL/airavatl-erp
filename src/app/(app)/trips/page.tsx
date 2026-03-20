@@ -28,6 +28,8 @@ const STATUS_COLORS: Record<AppTripStatus, string> = {
   in_transit: "bg-purple-100 text-purple-700",
   at_delivery: "bg-purple-100 text-purple-700",
   unloading: "bg-violet-100 text-violet-700",
+  waiting_for_advance: "bg-amber-100 text-amber-700",
+  waiting_for_final: "bg-amber-100 text-amber-700",
   completed: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
   driver_rejected: "bg-red-100 text-red-700",

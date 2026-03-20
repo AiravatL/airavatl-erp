@@ -606,6 +606,8 @@ export type AppTripStatus =
   | "in_transit"
   | "at_delivery"
   | "unloading"
+  | "waiting_for_advance"
+  | "waiting_for_final"
   | "completed"
   | "cancelled"
   | "driver_rejected";
@@ -620,6 +622,8 @@ export const APP_TRIP_STATUS_LABELS: Record<AppTripStatus, string> = {
   in_transit: "In Transit",
   at_delivery: "At Delivery",
   unloading: "Unloading",
+  waiting_for_advance: "Waiting for Advance",
+  waiting_for_final: "Waiting for Final",
   completed: "Completed",
   cancelled: "Cancelled",
   driver_rejected: "Driver Rejected",

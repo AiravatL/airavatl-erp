@@ -31,6 +31,7 @@ interface DetailsTabProps {
   data: AuctionTripDetail;
   status: AppTripStatus;
   isOps: boolean;
+  isErp?: boolean;
   paymentSummary: TripPaymentSummary | null;
 }
 
@@ -38,6 +39,7 @@ export function DetailsTab({
   data,
   status,
   isOps,
+  isErp,
   paymentSummary,
 }: DetailsTabProps) {
   const trip = data.trip;
@@ -293,7 +295,7 @@ export function DetailsTab({
       </Card>
 
       {/* 6. Timeline */}
-      <TripTimeline trip={trip} currentStatus={status} />
+      <TripTimeline trip={trip} currentStatus={status} isErp={isErp} />
     </div>
   );
 }

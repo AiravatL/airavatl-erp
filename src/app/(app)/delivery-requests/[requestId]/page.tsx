@@ -9,16 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { getDeliveryRequest, cancelDeliveryRequest } from "@/lib/api/delivery-requests";
-import type { AuctionDetailResponse, AuctionBidRow } from "@/lib/api/delivery-requests";
+import { getDeliveryRequest, cancelDeliveryRequest, type AuctionBidRow, type AuctionDetailResponse } from "@/lib/api/delivery-requests";
+import { apiRequest } from "@/lib/api/http";
+import { useAuth } from "@/lib/auth/auth-context";
+import { AdminDeleteDialog } from "@/components/shared/admin-delete-dialog";
 import { queryKeys } from "@/lib/query/keys";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { VEHICLE_TYPE_LABELS, DELIVERY_REQUEST_STATUS_LABELS, CARGO_TYPE_LABELS } from "@/lib/types";
@@ -32,6 +36,8 @@ import {
   Loader2,
   XCircle,
   Pencil,
+  Trash2,
+  Truck,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<DeliveryRequestStatus, string> = {
@@ -62,8 +68,14 @@ export default function AuctionDetailPage({
   const { requestId } = use(params);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [startTripOpen, setStartTripOpen] = useState(false);
+  const [selectedBid, setSelectedBid] = useState<AuctionBidRow | null>(null);
+  const [consignerTripAmount, setConsignerTripAmount] = useState("");
 
   const { data, isLoading, error: fetchError } = useQuery({
     queryKey: queryKeys.deliveryRequest(requestId),
@@ -82,6 +94,7 @@ export default function AuctionDetailPage({
   const status = req?.status as DeliveryRequestStatus | undefined;
   const statusLabel = status ? (DELIVERY_REQUEST_STATUS_LABELS[status] ?? status) : "";
   const statusColor = status ? (STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700") : "";
+  const canSelectWinner = (status === "active" || status === "ended") && bids.some((b) => b.status === "active");
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelDeliveryRequest(requestId, cancelReason.trim() || undefined),
@@ -89,6 +102,25 @@ export default function AuctionDetailPage({
       queryClient.invalidateQueries({ queryKey: queryKeys.deliveryRequest(requestId) });
       queryClient.invalidateQueries({ queryKey: ["delivery-requests"] });
       setCancelDialogOpen(false);
+    },
+  });
+
+  const startTripMutation = useMutation({
+    mutationFn: () =>
+      apiRequest<{ trip_id: string; trip_number: string }>(`/api/delivery-requests/${requestId}/select-winner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bid_id: selectedBid?.id,
+          consigner_trip_amount: Number(consignerTripAmount),
+        }),
+      }),
+    onSuccess: (result) => {
+      setStartTripOpen(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.deliveryRequest(requestId) });
+      queryClient.invalidateQueries({ queryKey: ["delivery-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      router.push(`/trips/${result.trip_id}`);
     },
   });
 
@@ -152,26 +184,36 @@ export default function AuctionDetailPage({
             {req.estimated_distance_km ? ` · ${req.estimated_distance_km} km` : ""}
           </p>
         </div>
-        {status === "active" && (
-          <div className="flex items-center gap-2">
-            {bids.length === 0 && (
-              <Link href={`/delivery-requests/new?edit=${requestId}`}>
-                <Button variant="outline" className="h-9 text-sm">
-                  <Pencil className="h-4 w-4 mr-1.5" />
-                  Edit
-                </Button>
-              </Link>
-            )}
+        <div className="flex items-center gap-2">
+          {status === "active" && bids.length === 0 && (
+            <Link href={`/delivery-requests/new?edit=${requestId}`}>
+              <Button variant="outline" className="h-9 text-sm">
+                <Pencil className="h-4 w-4 mr-1.5" />
+                Edit
+              </Button>
+            </Link>
+          )}
+          {status === "active" && (
             <Button
               variant="outline"
               className="h-9 text-sm text-red-600 border-red-200 hover:bg-red-50"
               onClick={() => setCancelDialogOpen(true)}
             >
               <XCircle className="h-4 w-4 mr-1.5" />
-              Cancel Auction
+              Cancel
             </Button>
-          </div>
-        )}
+          )}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              className="h-9 text-sm text-red-600 border-red-200 hover:bg-red-50"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Delete
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -314,11 +356,15 @@ export default function AuctionDetailPage({
                           <th className="px-3 py-2 text-right font-medium text-gray-500">Amount</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Status</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Time</th>
+                          {canSelectWinner && <th className="px-3 py-2 text-right font-medium text-gray-500">Action</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {bids.map((bid, idx) => (
-                          <BidTableRow key={bid.id} bid={bid} rank={idx + 1} />
+                          <BidTableRow key={bid.id} bid={bid} rank={idx + 1}
+                            showActionColumn={canSelectWinner}
+                            canSelect={canSelectWinner && bid.status === "active"}
+                            onSelect={() => { setSelectedBid(bid); setStartTripOpen(true); }} />
                         ))}
                       </tbody>
                     </table>
@@ -326,7 +372,9 @@ export default function AuctionDetailPage({
                   {/* Mobile cards */}
                   <div className="sm:hidden space-y-2">
                     {bids.map((bid, idx) => (
-                      <BidMobileCard key={bid.id} bid={bid} rank={idx + 1} />
+                      <BidMobileCard key={bid.id} bid={bid} rank={idx + 1}
+                        canSelect={canSelectWinner && bid.status === "active"}
+                        onSelect={() => { setSelectedBid(bid); setStartTripOpen(true); }} />
                     ))}
                   </div>
                 </>
@@ -410,6 +458,91 @@ export default function AuctionDetailPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Start Trip Dialog */}
+      <Dialog open={startTripOpen} onOpenChange={(o) => { if (!o && !startTripMutation.isPending) { setStartTripOpen(false); setConsignerTripAmount(""); startTripMutation.reset(); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Start Trip</DialogTitle>
+            <DialogDescription>
+              Select <span className="font-semibold">{selectedBid?.bidder_name}</span> as the winner
+              and create a trip with bid amount <span className="font-semibold">{selectedBid ? formatCurrency(selectedBid.bid_amount) : ""}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="rounded-lg bg-gray-50 p-3 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Driver Bid</span>
+                <span className="font-medium text-gray-900">{selectedBid ? formatCurrency(selectedBid.bid_amount) : ""}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Bidder</span>
+                <span className="text-gray-900">{selectedBid?.bidder_name}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">
+                Consigner Trip Amount <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="Amount consigner will pay"
+                value={consignerTripAmount}
+                onChange={(e) => setConsignerTripAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                className="h-9 text-sm"
+              />
+              <p className="text-[11px] text-gray-400">
+                This is what the consigner pays your company. Revenue = Consigner Amount - Driver Bid.
+              </p>
+              {consignerTripAmount && selectedBid && Number(consignerTripAmount) > 0 && (
+                <div className="flex justify-between text-xs pt-1">
+                  <span className="text-gray-500">Margin</span>
+                  <span className={`font-medium ${Number(consignerTripAmount) >= selectedBid.bid_amount ? "text-emerald-700" : "text-red-600"}`}>
+                    {formatCurrency(Number(consignerTripAmount) - selectedBid.bid_amount)}
+                    {" "}({((Number(consignerTripAmount) - selectedBid.bid_amount) / Number(consignerTripAmount) * 100).toFixed(1)}%)
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {startTripMutation.isError && (
+            <p className="text-sm text-red-600">
+              {startTripMutation.error instanceof Error ? startTripMutation.error.message : "Failed to start trip"}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setStartTripOpen(false); setConsignerTripAmount(""); }} disabled={startTripMutation.isPending} className="h-9 text-sm">
+              Cancel
+            </Button>
+            <Button size="sm"
+              disabled={!consignerTripAmount || Number(consignerTripAmount) <= 0 || startTripMutation.isPending}
+              onClick={() => startTripMutation.mutate()}
+              className="h-9 text-sm">
+              {startTripMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Truck className="h-4 w-4 mr-1.5" />}
+              Start Trip
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Delete Dialog */}
+      <AdminDeleteDialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onDeleted={() => {
+          queryClient.invalidateQueries({ queryKey: ["delivery-requests"] });
+          router.push("/delivery-requests");
+        }}
+        type="auction"
+        id={requestId}
+        label={req.request_number as string}
+        description={`Status: ${status}${bids.length > 0 ? ` · ${bids.length} bid(s) will be deleted` : ""}`}
+      />
     </>
   );
 }
@@ -549,7 +682,7 @@ function AuctionStatusSection({ req }: { req: Record<string, unknown> }) {
   );
 }
 
-function BidTableRow({ bid, rank }: { bid: AuctionBidRow; rank: number }) {
+function BidTableRow({ bid, rank, showActionColumn, canSelect, onSelect }: { bid: AuctionBidRow; rank: number; showActionColumn?: boolean; canSelect?: boolean; onSelect?: () => void }) {
   const statusColor = BID_STATUS_COLORS[bid.status] ?? "bg-gray-100 text-gray-700";
   const statusLabel = bid.status.charAt(0).toUpperCase() + bid.status.slice(1);
   const typeLabel = bid.bidder_type === "individual_driver" ? "Driver" : "Transporter";
@@ -576,11 +709,20 @@ function BidTableRow({ bid, rank }: { bid: AuctionBidRow; rank: number }) {
         </Badge>
       </td>
       <td className="px-3 py-2 text-xs text-gray-500">{formatDate(bid.created_at)}</td>
+      {showActionColumn && (
+        <td className="px-3 py-2 text-right">
+          {canSelect ? (
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={onSelect}>
+              <Truck className="h-3 w-3" /> Start Trip
+            </Button>
+          ) : null}
+        </td>
+      )}
     </tr>
   );
 }
 
-function BidMobileCard({ bid, rank }: { bid: AuctionBidRow; rank: number }) {
+function BidMobileCard({ bid, rank, canSelect, onSelect }: { bid: AuctionBidRow; rank: number; canSelect?: boolean; onSelect?: () => void }) {
   const statusColor = BID_STATUS_COLORS[bid.status] ?? "bg-gray-100 text-gray-700";
   const statusLabel = bid.status === "won" ? "Winner" : bid.status.charAt(0).toUpperCase() + bid.status.slice(1);
   const typeLabel = bid.bidder_type === "individual_driver" ? "Driver" : "Transporter";
@@ -597,12 +739,19 @@ function BidMobileCard({ bid, rank }: { bid: AuctionBidRow; rank: number }) {
           {statusLabel}
         </Badge>
       </div>
-      <div className="flex items-center gap-2 text-xs text-gray-500">
-        <span>{typeLabel}</span>
-        <span>·</span>
-        <span className="font-medium text-gray-900">{formatCurrency(bid.bid_amount)}</span>
-        <span>·</span>
-        <span>{formatDate(bid.created_at)}</span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span>{typeLabel}</span>
+          <span>·</span>
+          <span className="font-medium text-gray-900">{formatCurrency(bid.bid_amount)}</span>
+          <span>·</span>
+          <span>{formatDate(bid.created_at)}</span>
+        </div>
+        {canSelect && (
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1 shrink-0 ml-2" onClick={onSelect}>
+            <Truck className="h-3 w-3" /> Start Trip
+          </Button>
+        )}
       </div>
     </div>
   );
