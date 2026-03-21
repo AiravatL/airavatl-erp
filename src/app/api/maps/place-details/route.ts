@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireMapsActor, getGoogleMapsApiKey, missingKeyResponse } from "@/app/api/maps/_shared";
+import {
+  requireMapsActor,
+  getGoogleMapsApiKey,
+  missingKeyResponse,
+  enforceMapsRateLimit,
+} from "@/app/api/maps/_shared";
 
 export const dynamic = "force-dynamic";
+
+const MAX_PLACE_ID_LENGTH = 200;
+const PLACE_ID_RE = /^[A-Za-z0-9_-]+$/;
+const PLACE_DETAILS_CACHE_TTL_MS = 10 * 60_000;
+const placeDetailsCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 interface AddressComponent {
   long_name: string;
@@ -37,13 +47,28 @@ export async function GET(request: Request) {
   if (!apiKey) return missingKeyResponse();
 
   const { searchParams } = new URL(request.url);
-  const placeId = searchParams.get("placeId")?.trim();
+  const placeId = searchParams.get("placeId")?.trim() ?? "";
 
   if (!placeId) {
     return NextResponse.json(
       { ok: false, message: "placeId is required" },
       { status: 400 },
     );
+  }
+  if (placeId.length > MAX_PLACE_ID_LENGTH || !PLACE_ID_RE.test(placeId)) {
+    return NextResponse.json(
+      { ok: false, message: "Invalid placeId" },
+      { status: 400 },
+    );
+  }
+
+  const rateLimitResponse = enforceMapsRateLimit(actorResult.actor.id, "place-details");
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const cacheKey = `${actorResult.actor.id}:${placeId}`;
+  const cached = placeDetailsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json({ ok: true, data: cached.data });
   }
 
   const params = new URLSearchParams({
@@ -102,6 +127,11 @@ export async function GET(request: Request) {
       types: c.types,
     })),
   };
+
+  placeDetailsCache.set(cacheKey, {
+    data,
+    expiresAt: Date.now() + PLACE_DETAILS_CACHE_TTL_MS,
+  });
 
   return NextResponse.json({ ok: true, data });
 }

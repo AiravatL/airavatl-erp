@@ -57,14 +57,18 @@ export async function POST(
     consigner_trip_amount: number;
   } | null;
 
+  if (!result?.trip_id) {
+    return NextResponse.json({ ok: false, message: "Failed to create trip" }, { status: 500 });
+  }
+
   return NextResponse.json({
     ok: true,
     data: {
-      trip_id: result?.trip_id,
-      trip_number: result?.trip_number,
-      pickup_otp: result?.pickup_otp,
-      bid_amount: result?.bid_amount,
-      consigner_trip_amount: result?.consigner_trip_amount,
+      trip_id: result.trip_id,
+      trip_number: result.trip_number,
+      pickup_otp: result.pickup_otp,
+      bid_amount: result.bid_amount,
+      consigner_trip_amount: result.consigner_trip_amount,
     },
   });
 }

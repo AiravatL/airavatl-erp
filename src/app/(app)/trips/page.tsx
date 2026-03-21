@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { PageHeader } from "@/components/shared/page-header";
 import { KpiCard } from "@/components/reports/kpi-card";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +43,7 @@ const ACTIVE_STATUSES = Object.entries(APP_TRIP_STATUS_LABELS)
 
 const OPS_ROLES = new Set(["operations"]);
 const PAGE_SIZE = 50;
+const TRIP_TERMINAL = new Set(["completed", "cancelled", "driver_rejected"]);
 
 export default function TripsListPage() {
   const { user } = useAuth();
@@ -49,7 +51,7 @@ export default function TripsListPage() {
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
 
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0);
 
@@ -68,12 +70,10 @@ export default function TripsListPage() {
     placeholderData: keepPreviousData,
   });
 
-  const TERMINAL = new Set(["completed", "cancelled", "driver_rejected"]);
   const allItems = query.data?.items ?? [];
-  // If no specific status filter, hide terminal trips (they belong in history)
-  const items = status ? allItems : allItems.filter((t) => !TERMINAL.has(t.status));
+  const items = status ? allItems : allItems.filter((t) => !TRIP_TERMINAL.has(t.status));
   const total = status ? (query.data?.total ?? 0) : items.length;
-  const active = items.filter((t) => !TERMINAL.has(t.status)).length;
+  const active = items.length;
 
   return (
     <>
@@ -98,7 +98,7 @@ export default function TripsListPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input placeholder="Search by trip #, city, driver..." value={search}
-            onChange={(e) => { setSearch(e.target.value); setOffset(0); setTimeout(() => setDebouncedSearch(e.target.value), 300); }}
+            onChange={(e) => { setSearch(e.target.value); setOffset(0); }}
             className="pl-9 h-9 text-sm" />
         </div>
         <Select value={status || "all"} onValueChange={(v) => { setStatus(v === "all" ? "" : v); setOffset(0); }}>

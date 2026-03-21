@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { searchPlaces, getPlaceDetails } from "@/lib/api/delivery-requests";
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import type { PlacePrediction, PlaceDetails } from "@/lib/api/delivery-requests";
 import { Search, MapPin, X, Loader2 } from "lucide-react";
 
@@ -18,6 +19,14 @@ interface LocationPickerProps {
   onClear: () => void;
   onContactNameChange: (value: string) => void;
   onContactPhoneChange: (value: string) => void;
+}
+
+const MIN_SEARCH_CHARS = 5;
+const SEARCH_DEBOUNCE_MS = 650;
+const SEARCH_CACHE_TTL_MS = 60_000;
+
+function normalizeSearchQuery(input: string) {
+  return input.replace(/\s+/g, " ").trim();
 }
 
 export function LocationPicker({
@@ -37,8 +46,10 @@ export function LocationPicker({
   const [isSearching, setIsSearching] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchCacheRef = useRef(new Map<string, { expiresAt: number; predictions: PlacePrediction[] }>());
+  const searchRequestIdRef = useRef(0);
+  const debouncedQuery = useDebouncedValue(normalizeSearchQuery(query), SEARCH_DEBOUNCE_MS);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -51,32 +62,57 @@ export function LocationPicker({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const handleSearch = useCallback(
-    (input: string) => {
-      setQuery(input);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+  useEffect(() => {
+    const now = Date.now();
+    for (const [key, value] of searchCacheRef.current.entries()) {
+      if (value.expiresAt <= now) {
+        searchCacheRef.current.delete(key);
+      }
+    }
+  }, [debouncedQuery]);
 
-      if (input.trim().length < 2) {
+  useEffect(() => {
+    if (value) return;
+
+    if (debouncedQuery.length < MIN_SEARCH_CHARS) {
+      setPredictions([]);
+      setShowDropdown(false);
+      setIsSearching(false);
+      return;
+    }
+
+    const cached = searchCacheRef.current.get(debouncedQuery.toLowerCase());
+    if (cached && cached.expiresAt > Date.now()) {
+      setPredictions(cached.predictions);
+      setShowDropdown(cached.predictions.length > 0);
+      setIsSearching(false);
+      return;
+    }
+
+    const requestId = ++searchRequestIdRef.current;
+    setIsSearching(true);
+
+    searchPlaces(debouncedQuery, sessionToken)
+      .then((result) => {
+        if (searchRequestIdRef.current !== requestId) return;
+        searchCacheRef.current.set(debouncedQuery.toLowerCase(), {
+          predictions: result.predictions,
+          expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+        });
+        setPredictions(result.predictions);
+        setShowDropdown(result.predictions.length > 0);
+      })
+      .catch(() => {
+        if (searchRequestIdRef.current !== requestId) return;
         setPredictions([]);
         setShowDropdown(false);
-        return;
-      }
-
-      debounceRef.current = setTimeout(async () => {
-        setIsSearching(true);
-        try {
-          const result = await searchPlaces(input.trim(), sessionToken);
-          setPredictions(result.predictions);
-          setShowDropdown(true);
-        } catch {
-          setPredictions([]);
-        } finally {
+      })
+      .finally(() => {
+        if (searchRequestIdRef.current === requestId) {
           setIsSearching(false);
         }
-      }, 300);
-    },
-    [sessionToken],
-  );
+      });
+  }, [debouncedQuery, sessionToken, value]);
 
   const handleSelectPrediction = async (prediction: PlacePrediction) => {
     setShowDropdown(false);
@@ -97,6 +133,7 @@ export function LocationPicker({
     onClear();
     setQuery("");
     setPredictions([]);
+    setShowDropdown(false);
   };
 
   if (value) {
@@ -169,16 +206,31 @@ export function LocationPicker({
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <Input
-          placeholder="Type to search places..."
+          placeholder={`Type at least ${MIN_SEARCH_CHARS} characters to search...`}
           value={query}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (normalizeSearchQuery(e.target.value).length < MIN_SEARCH_CHARS) {
+              setPredictions([]);
+              setShowDropdown(false);
+            }
+          }}
           onFocus={() => predictions.length > 0 && setShowDropdown(true)}
           className="pl-9 h-9 text-sm"
+          maxLength={120}
+          autoComplete="off"
+          spellCheck={false}
         />
         {(isSearching || isResolving) && (
           <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
         )}
       </div>
+
+      {query.length > 0 && normalizeSearchQuery(query).length < MIN_SEARCH_CHARS && (
+        <p className="text-xs text-gray-500">
+          Keep typing to at least {MIN_SEARCH_CHARS} characters before search starts.
+        </p>
+      )}
 
       {showDropdown && predictions.length > 0 && (
         <div className="rounded-md border border-gray-200 bg-white shadow-md max-h-48 overflow-y-auto">

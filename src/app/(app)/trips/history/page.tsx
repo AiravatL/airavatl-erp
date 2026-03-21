@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ export default function TripHistoryPage() {
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
 
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "cancelled">("all");
   const [offset, setOffset] = useState(0);
 
@@ -75,7 +76,7 @@ export default function TripHistoryPage() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input placeholder="Search by trip #, city..." value={search}
-            onChange={(e) => { setSearch(e.target.value); setOffset(0); setTimeout(() => setDebouncedSearch(e.target.value), 300); }}
+            onChange={(e) => { setSearch(e.target.value); setOffset(0); }}
             className="pl-9 h-9 text-sm" />
         </div>
         <div className="flex gap-1.5">

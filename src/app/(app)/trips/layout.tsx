@@ -8,7 +8,6 @@ import type { Role } from "@/lib/types";
 const ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
-  "sales_consigner",
   "operations",
   "accounts",
 ];

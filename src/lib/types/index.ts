@@ -532,7 +532,6 @@ export type DeliveryRequestStatus =
   | "ended"
   | "winner_selected"
   | "trip_created"
-  | "completed"
   | "cancelled"
   | "incomplete";
 
@@ -572,10 +571,9 @@ export const CARGO_TYPE_LABELS: Record<CargoType, string> = {
 export const DELIVERY_REQUEST_STATUS_LABELS: Record<DeliveryRequestStatus, string> = {
   draft: "Draft",
   active: "Active",
-  ended: "Ended",
+  ended: "Completed",
   winner_selected: "Winner Selected",
   trip_created: "Trip Created",
-  completed: "Completed",
   cancelled: "Cancelled",
   incomplete: "Incomplete",
 };

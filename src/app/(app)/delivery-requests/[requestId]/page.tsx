@@ -43,10 +43,9 @@ import {
 const STATUS_COLORS: Record<DeliveryRequestStatus, string> = {
   draft: "bg-gray-100 text-gray-700",
   active: "bg-blue-100 text-blue-700",
-  ended: "bg-amber-100 text-amber-700",
+  ended: "bg-green-100 text-green-700",
   winner_selected: "bg-purple-100 text-purple-700",
   trip_created: "bg-green-100 text-green-700",
-  completed: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
   incomplete: "bg-gray-100 text-gray-600",
 };
@@ -70,6 +69,7 @@ export default function AuctionDetailPage({
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+  const isOps = user?.role === "operations";
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -91,11 +91,22 @@ export default function AuctionDetailPage({
   const bids = data?.bids ?? [];
   const winnerSelection = data?.winner_selection;
   const erpMetadata = data?.erp_metadata;
+  const isErpAuction = !!erpMetadata;
 
   const status = req?.status as DeliveryRequestStatus | undefined;
   const statusLabel = status ? (DELIVERY_REQUEST_STATUS_LABELS[status] ?? status) : "";
   const statusColor = status ? (STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700") : "";
   const canSelectWinner = (status === "active" || status === "ended") && bids.some((b) => b.status === "active");
+
+  // Fetch commission settings for ERP auctions
+  const commissionQuery = useQuery({
+    queryKey: ["settings", "commission"],
+    queryFn: () => apiRequest<{ commission_percentage: number; minimum_commission_percentage: number }>("/api/settings/commission"),
+    enabled: isErpAuction && canSelectWinner,
+    staleTime: 5 * 60_000,
+  });
+  const commissionPct = commissionQuery.data?.commission_percentage ?? 10;
+  const minCommissionPct = commissionQuery.data?.minimum_commission_percentage ?? 5;
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelDeliveryRequest(requestId, cancelReason.trim() || undefined),
@@ -354,7 +365,15 @@ export default function AuctionDetailPage({
                           <th className="px-3 py-2 text-left font-medium text-gray-500">#</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Bidder</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Type</th>
-                          <th className="px-3 py-2 text-right font-medium text-gray-500">Amount</th>
+                          {!(isOps && isErpAuction) && (
+                            <th className="px-3 py-2 text-right font-medium text-gray-500">Bid Amount</th>
+                          )}
+                          {isErpAuction && canSelectWinner && (
+                            <>
+                              <th className="px-3 py-2 text-right font-medium text-gray-500">Expected Amount</th>
+                              <th className="px-3 py-2 text-right font-medium text-gray-500">Minimum Amount</th>
+                            </>
+                          )}
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Status</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Time</th>
                           {canSelectWinner && <th className="px-3 py-2 text-right font-medium text-gray-500">Action</th>}
@@ -364,6 +383,10 @@ export default function AuctionDetailPage({
                         {bids.map((bid, idx) => (
                           <BidTableRow key={bid.id} bid={bid} rank={idx + 1}
                             showActionColumn={canSelectWinner}
+                            hideBidAmount={isOps && isErpAuction}
+                            showTripAmounts={isErpAuction && canSelectWinner}
+                            commissionPct={commissionPct}
+                            minCommissionPct={minCommissionPct}
                             canSelect={canSelectWinner && bid.status === "active"}
                             onSelect={() => { setSelectedBid(bid); setStartTripOpen(true); }} />
                         ))}
@@ -374,6 +397,10 @@ export default function AuctionDetailPage({
                   <div className="sm:hidden space-y-2">
                     {bids.map((bid, idx) => (
                       <BidMobileCard key={bid.id} bid={bid} rank={idx + 1}
+                        hideBidAmount={isOps && isErpAuction}
+                        showTripAmounts={isErpAuction && canSelectWinner}
+                        commissionPct={commissionPct}
+                        minCommissionPct={minCommissionPct}
                         canSelect={canSelectWinner && bid.status === "active"}
                         onSelect={() => { setSelectedBid(bid); setStartTripOpen(true); }} />
                     ))}
@@ -471,44 +498,70 @@ export default function AuctionDetailPage({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
-            <div className="rounded-lg bg-gray-50 p-3 space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Driver Bid</span>
-                <span className="font-medium text-gray-900">{selectedBid ? formatCurrency(selectedBid.bid_amount) : ""}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Bidder</span>
-                <span className="text-gray-900">{selectedBid?.bidder_name}</span>
-              </div>
-            </div>
+          {(() => {
+            const bidAmt = selectedBid?.bid_amount ?? 0;
+            const suggestedAmt = Math.round(bidAmt * (1 + commissionPct / 100));
+            const minimumAmt = Math.round(bidAmt * (1 + minCommissionPct / 100));
+            const enteredAmt = Number(consignerTripAmount) || 0;
+            const isBelowMinimum = enteredAmt > 0 && enteredAmt < minimumAmt;
 
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">
-                Consigner Trip Amount <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="text"
-                inputMode="decimal"
-                placeholder="Amount consigner will pay"
-                value={consignerTripAmount}
-                onChange={(e) => setConsignerTripAmount(e.target.value.replace(/[^\d.]/g, ""))}
-                className="h-9 text-sm"
-              />
-              <p className="text-[11px] text-gray-400">
-                This is what the consigner pays your company. Revenue = Consigner Amount - Driver Bid.
-              </p>
-              {consignerTripAmount && selectedBid && Number(consignerTripAmount) > 0 && (
-                <div className="flex justify-between text-xs pt-1">
-                  <span className="text-gray-500">Margin</span>
-                  <span className={`font-medium ${Number(consignerTripAmount) >= selectedBid.bid_amount ? "text-emerald-700" : "text-red-600"}`}>
-                    {formatCurrency(Number(consignerTripAmount) - selectedBid.bid_amount)}
-                    {" "}({((Number(consignerTripAmount) - selectedBid.bid_amount) / Number(consignerTripAmount) * 100).toFixed(1)}%)
-                  </span>
+            return (
+              <div className="space-y-3 py-2">
+                {/* Bid & Commission Info */}
+                <div className="rounded-lg bg-gray-50 p-3 space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Bidder</span>
+                    <span className="text-gray-900">{selectedBid?.bidder_name}</span>
+                  </div>
+                  {!isOps && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Driver Bid</span>
+                      <span className="font-medium text-gray-900">{formatCurrency(bidAmt)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-gray-200 pt-1.5 mt-1.5 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Expected Trip Amount</span>
+                      <span className="font-medium text-blue-700">{formatCurrency(suggestedAmt)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Minimum Trip Amount</span>
+                      <span className="font-medium text-amber-700">{formatCurrency(minimumAmt)}</span>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
+
+                {/* Trip Amount Input */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">
+                    Consigner Trip Amount <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder={`Min ${formatCurrency(minimumAmt)}`}
+                    value={consignerTripAmount}
+                    onChange={(e) => setConsignerTripAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                    className={`h-9 text-sm ${isBelowMinimum ? "border-red-300 focus-visible:ring-red-400" : ""}`}
+                  />
+                  {isBelowMinimum && (
+                    <p className="text-xs text-red-600">
+                      Minimum trip amount is {formatCurrency(minimumAmt)}
+                    </p>
+                  )}
+                  {!isOps && enteredAmt > 0 && !isBelowMinimum && (
+                    <div className="flex justify-between text-xs pt-1">
+                      <span className="text-gray-500">Margin</span>
+                      <span className={`font-medium ${enteredAmt >= bidAmt ? "text-emerald-700" : "text-red-600"}`}>
+                        {formatCurrency(enteredAmt - bidAmt)}
+                        {" "}({((enteredAmt - bidAmt) / enteredAmt * 100).toFixed(1)}%)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {startTripMutation.isError && (
             <p className="text-sm text-red-600">
@@ -521,7 +574,9 @@ export default function AuctionDetailPage({
               Cancel
             </Button>
             <Button size="sm"
-              disabled={!consignerTripAmount || Number(consignerTripAmount) <= 0 || startTripMutation.isPending}
+              disabled={!consignerTripAmount || Number(consignerTripAmount) <= 0
+                || Number(consignerTripAmount) < Math.round((selectedBid?.bid_amount ?? 0) * (1 + minCommissionPct / 100))
+                || startTripMutation.isPending}
               onClick={() => startTripMutation.mutate()}
               className="h-9 text-sm">
               {startTripMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Truck className="h-4 w-4 mr-1.5" />}
@@ -670,7 +725,7 @@ function AuctionStatusSection({ req }: { req: Record<string, unknown> }) {
         </p>
       )}
 
-      {(status === "winner_selected" || status === "trip_created" || status === "completed") && (
+      {(status === "winner_selected" || status === "trip_created") && (
         <p className="text-sm text-green-700">
           {status === "winner_selected"
             ? "Winner has been selected"
@@ -683,11 +738,17 @@ function AuctionStatusSection({ req }: { req: Record<string, unknown> }) {
   );
 }
 
-function BidTableRow({ bid, rank, showActionColumn, canSelect, onSelect }: { bid: AuctionBidRow; rank: number; showActionColumn?: boolean; canSelect?: boolean; onSelect?: () => void }) {
+function BidTableRow({ bid, rank, showActionColumn, hideBidAmount, showTripAmounts, commissionPct, minCommissionPct, canSelect, onSelect }: {
+  bid: AuctionBidRow; rank: number; showActionColumn?: boolean; hideBidAmount?: boolean; showTripAmounts?: boolean;
+  commissionPct?: number; minCommissionPct?: number; canSelect?: boolean; onSelect?: () => void;
+}) {
   const statusColor = BID_STATUS_COLORS[bid.status] ?? "bg-gray-100 text-gray-700";
   const statusLabel = bid.status.charAt(0).toUpperCase() + bid.status.slice(1);
   const typeLabel = bid.bidder_type === "individual_driver" ? "Driver" : "Transporter";
   const typeColor = bid.bidder_type === "individual_driver" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700";
+
+  const suggestedAmt = showTripAmounts ? Math.round(bid.bid_amount * (1 + (commissionPct ?? 10) / 100)) : 0;
+  const minimumAmt = showTripAmounts ? Math.round(bid.bid_amount * (1 + (minCommissionPct ?? 5) / 100)) : 0;
 
   return (
     <tr className="hover:bg-gray-50">
@@ -701,9 +762,21 @@ function BidTableRow({ bid, rank, showActionColumn, canSelect, onSelect }: { bid
           {typeLabel}
         </Badge>
       </td>
-      <td className="px-3 py-2 text-right font-medium text-gray-900">
-        {formatCurrency(bid.bid_amount)}
-      </td>
+      {!hideBidAmount && (
+        <td className="px-3 py-2 text-right font-medium text-gray-900">
+          {formatCurrency(bid.bid_amount)}
+        </td>
+      )}
+      {showTripAmounts && (
+        <>
+          <td className="px-3 py-2 text-right font-medium text-blue-700">
+            {formatCurrency(suggestedAmt)}
+          </td>
+          <td className="px-3 py-2 text-right font-medium text-amber-600">
+            {formatCurrency(minimumAmt)}
+          </td>
+        </>
+      )}
       <td className="px-3 py-2">
         <Badge variant="outline" className={`border-0 font-medium text-xs ${statusColor}`}>
           {bid.status === "won" ? "Winner" : statusLabel}
@@ -723,10 +796,16 @@ function BidTableRow({ bid, rank, showActionColumn, canSelect, onSelect }: { bid
   );
 }
 
-function BidMobileCard({ bid, rank, canSelect, onSelect }: { bid: AuctionBidRow; rank: number; canSelect?: boolean; onSelect?: () => void }) {
+function BidMobileCard({ bid, rank, hideBidAmount, showTripAmounts, commissionPct, minCommissionPct, canSelect, onSelect }: {
+  bid: AuctionBidRow; rank: number; hideBidAmount?: boolean; showTripAmounts?: boolean;
+  commissionPct?: number; minCommissionPct?: number; canSelect?: boolean; onSelect?: () => void;
+}) {
   const statusColor = BID_STATUS_COLORS[bid.status] ?? "bg-gray-100 text-gray-700";
   const statusLabel = bid.status === "won" ? "Winner" : bid.status.charAt(0).toUpperCase() + bid.status.slice(1);
   const typeLabel = bid.bidder_type === "individual_driver" ? "Driver" : "Transporter";
+
+  const suggestedAmt = showTripAmounts ? Math.round(bid.bid_amount * (1 + (commissionPct ?? 10) / 100)) : 0;
+  const minimumAmt = showTripAmounts ? Math.round(bid.bid_amount * (1 + (minCommissionPct ?? 5) / 100)) : 0;
 
   return (
     <div className="rounded-md border border-gray-100 p-3">
@@ -740,20 +819,34 @@ function BidMobileCard({ bid, rank, canSelect, onSelect }: { bid: AuctionBidRow;
           {statusLabel}
         </Badge>
       </div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>{typeLabel}</span>
-          <span>·</span>
-          <span className="font-medium text-gray-900">{formatCurrency(bid.bid_amount)}</span>
-          <span>·</span>
-          <span>{formatDate(bid.created_at)}</span>
-        </div>
-        {canSelect && (
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1 shrink-0 ml-2" onClick={onSelect}>
-            <Truck className="h-3 w-3" /> Start Trip
-          </Button>
+
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+        <span>{typeLabel}</span>
+        {!hideBidAmount && (
+          <>
+            <span>·</span>
+            <span className="font-medium text-gray-900">{formatCurrency(bid.bid_amount)}</span>
+          </>
         )}
+        <span>·</span>
+        <span>{formatDate(bid.created_at)}</span>
       </div>
+
+      {showTripAmounts && (
+        <div className="flex items-center gap-3 text-[11px] bg-gray-50 rounded px-2 py-1 mb-1.5">
+          <span className="text-gray-500">Expected:</span>
+          <span className="font-medium text-blue-700">{formatCurrency(suggestedAmt)}</span>
+          <span className="text-gray-300">|</span>
+          <span className="text-gray-500">Min:</span>
+          <span className="font-medium text-amber-600">{formatCurrency(minimumAmt)}</span>
+        </div>
+      )}
+
+      {canSelect && (
+        <Button variant="outline" size="sm" className="h-7 text-xs gap-1 w-full mt-1" onClick={onSelect}>
+          <Truck className="h-3 w-3" /> Start Trip
+        </Button>
+      )}
     </div>
   );
 }

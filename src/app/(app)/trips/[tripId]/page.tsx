@@ -3,7 +3,7 @@
 import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,10 +23,11 @@ import {
 } from "@/lib/types";
 import type { AppTripStatus, VehicleTypeRequired } from "@/lib/types";
 import { formatCurrency, formatDate, formatRelativeTime } from "@/lib/formatters";
+import { apiRequest } from "@/lib/api/http";
 import {
   ArrowLeft, Loader2, MapPin, Truck, Phone, User, Package,
   Route, DollarSign, Clock, ExternalLink, AlertTriangle,
-  CircleDot, XCircle, Camera, Trash2,
+  CircleDot, XCircle, Camera, Trash2, Banknote,
 } from "lucide-react";
 import { TripTimeline } from "./_components/trip-timeline";
 import { SignedImagePreview } from "@/components/shared/signed-image-preview";
@@ -61,6 +62,7 @@ const ACTIVE_TRACKING_STATUSES = new Set<AppTripStatus>([
 export default function TripDetailPage({ params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = use(params);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const isOps = user ? OPS_ROLES.has(user.role) : false;
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
@@ -92,6 +94,24 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
   });
 
   const isTerminal = status != null && ["completed", "cancelled", "driver_rejected"].includes(status);
+  const isErp = !!tripQuery.data?.request_metadata;
+  const canRequestPayment = (isOps || isAdmin) && isErp;
+  const needsAdvanceRequest = canRequestPayment && status === "waiting_for_advance";
+  const needsFinalRequest = canRequestPayment && status === "waiting_for_final";
+
+  const requestPaymentMutation = useMutation({
+    mutationFn: (paymentType: "advance" | "final") =>
+      apiRequest(`/api/trips/${tripId}/request-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_type: paymentType }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tripPaymentSummary(tripId) });
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+    },
+  });
 
   const driverLocationQuery = useQuery({
     queryKey: queryKeys.tripDriverLocation(tripId),
@@ -134,15 +154,14 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
   const statusColor = STATUS_COLORS[status!] ?? "bg-gray-100 text-gray-700";
   const vehicleLabel = VEHICLE_TYPE_LABELS[trip.vehicle_type as VehicleTypeRequired] ?? (trip.vehicle_type as string);
 
-  // Financial: bid.bid_amount = what driver gets, trip.trip_amount = what consigner pays (app trips)
-  const driverBidAmount = (bid?.bid_amount as number) ?? 0;
-  const tripAmount = (trip.trip_amount as number) ?? 0; // consigner-facing amount (bid + commission + GST)
-  const erpConsignerAmount = erpMeta?.consigner_trip_amount ?? null; // ERP trips: manually set consigner price
+  // Financial: trip_amount = what consigner pays (both app and ERP)
+  // driver_bid_amount = what driver gets (= auction bid)
+  const driverBidAmount = (bid?.bid_amount as number) ?? (trip.driver_bid_amount as number) ?? 0;
+  const tripAmount = (trip.trip_amount as number) ?? 0;
   const isErpTrip = !!reqMeta;
 
-  // Revenue calculation
-  const appRevenue = tripAmount > driverBidAmount ? tripAmount - driverBidAmount : 0;
-  const erpMargin = erpConsignerAmount != null ? erpConsignerAmount - driverBidAmount : null;
+  // Revenue = consigner pays - driver gets (works for both app and ERP)
+  const revenue = tripAmount > driverBidAmount ? tripAmount - driverBidAmount : 0;
 
   const driverName = (bid?.bidder_name as string) ?? "Unknown Driver";
   const driverPhone = (bid?.bidder_phone as string) ?? "";
@@ -449,27 +468,15 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
               </CardHeader>
               <CardContent className="space-y-2.5">
                 <FinRow label="Driver Bid" value={formatCurrency(driverBidAmount)} />
-
-                {isErpTrip && erpConsignerAmount != null ? (
-                  <>
-                    <FinRow label="Consigner Pays" value={formatCurrency(erpConsignerAmount)} />
-                    <div className="pt-2 border-t border-gray-100">
-                      <FinRow label="Margin (Revenue)"
-                        value={formatCurrency(erpMargin ?? 0)}
-                        valueClass={erpMargin != null && erpMargin >= 0 ? "text-emerald-700 font-semibold" : "text-red-600 font-semibold"} />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <FinRow label="Consigner Pays" value={formatCurrency(tripAmount)} />
-                    <div className="pt-2 border-t border-gray-100">
-                      <FinRow label="Platform Revenue"
-                        value={formatCurrency(appRevenue)}
-                        valueClass="text-emerald-700 font-semibold" />
-                      <p className="text-[11px] text-gray-400 mt-1">Commission + GST (rates at time of booking)</p>
-                    </div>
-                  </>
-                )}
+                <FinRow label="Consigner Pays" value={formatCurrency(tripAmount)} />
+                <div className="pt-2 border-t border-gray-100">
+                  <FinRow label={isErpTrip ? "Margin" : "Platform Revenue"}
+                    value={formatCurrency(revenue)}
+                    valueClass={revenue >= 0 ? "text-emerald-700 font-semibold" : "text-red-600 font-semibold"} />
+                  {!isErpTrip && (
+                    <p className="text-[11px] text-gray-400 mt-1">Commission + GST (rates at time of booking)</p>
+                  )}
+                </div>
 
                 {!isErpTrip && paymentSummaryQuery.data && (
                   <div className="pt-2 border-t border-gray-100 space-y-1.5">
@@ -482,6 +489,54 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                     )}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Payment Request Actions (ERP trips — ops/admin) */}
+          {(needsAdvanceRequest || needsFinalRequest) && (
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <Banknote className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    {requestPaymentMutation.isSuccess ? (
+                      <>
+                        <p className="text-sm font-medium text-emerald-700">Payment Requested</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Accounts team will process the payment.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-gray-900">
+                          {needsAdvanceRequest ? "Driver has uploaded loading proof" : "Driver has uploaded POD"}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {needsAdvanceRequest
+                            ? "Request advance payment for the driver. Accounts will process once requested."
+                            : "Request final payment for the driver. Accounts will process once requested."}
+                        </p>
+                        {requestPaymentMutation.isError && (
+                          <p className="text-xs text-red-600 mt-1">
+                            {requestPaymentMutation.error instanceof Error ? requestPaymentMutation.error.message : "Failed to request payment"}
+                          </p>
+                        )}
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs gap-1.5 mt-2"
+                          disabled={requestPaymentMutation.isPending}
+                          onClick={() => requestPaymentMutation.mutate(needsAdvanceRequest ? "advance" : "final")}
+                        >
+                          {requestPaymentMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Banknote className="h-3.5 w-3.5" />
+                          )}
+                          {needsAdvanceRequest ? "Request Advance Payment" : "Request Final Payment"}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}

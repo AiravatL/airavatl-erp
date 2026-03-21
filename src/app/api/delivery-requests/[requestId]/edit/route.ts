@@ -5,7 +5,7 @@ import { isMissingRpcError } from "@/lib/supabase/rpc";
 interface RouteParams { params: Promise<{ requestId: string }> }
 
 export async function PUT(request: Request, context: RouteParams) {
-  const actorResult = await requireServerActor(["super_admin", "admin", "sales_consigner"]);
+  const actorResult = await requireServerActor(["super_admin", "admin", "operations"]);
   if ("error" in actorResult) return actorResult.error;
 
   const { requestId } = await context.params;

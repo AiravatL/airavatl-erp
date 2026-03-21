@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const DELIVERY_REQUEST_ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
-  "sales_consigner",
+  "operations",
 ];
 
 export async function requireDeliveryRequestActor() {
@@ -53,6 +53,12 @@ export function mapRpcError(message: string, code?: string) {
     return NextResponse.json({ ok: false, message: "Bid is no longer active" }, { status: 400 });
   if (message?.includes("invalid_trip_amount"))
     return NextResponse.json({ ok: false, message: "Consigner trip amount must be greater than 0" }, { status: 400 });
+  if (message?.includes("trip_amount_below_minimum")) {
+    const parts = message.split(":");
+    const minAmt = parts[1] || "0";
+    const minPct = parts[2] || "5";
+    return NextResponse.json({ ok: false, message: `Trip amount must be at least ₹${Number(minAmt).toLocaleString("en-IN")} (bid + ${minPct}% minimum commission)` }, { status: 400 });
+  }
   if (message?.includes("trip_creation_failed"))
     return NextResponse.json({ ok: false, message: "Failed to create trip. Please try again." }, { status: 500 });
   if (code === "42501")

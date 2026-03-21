@@ -26,6 +26,7 @@ export async function GET() {
       "commission_percentage",
       "gst_percentage",
       "advance_percentage",
+      "minimum_commission_percentage",
     ]);
 
   if (error) {
@@ -60,6 +61,7 @@ const VALID_KEYS = new Set([
   "commission_percentage",
   "gst_percentage",
   "advance_percentage",
+  "minimum_commission_percentage",
 ]);
 
 export async function PUT(request: Request) {

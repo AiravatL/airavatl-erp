@@ -20,11 +20,8 @@ export interface CustomerActor {
 export const CUSTOMER_READ_ROLES: Role[] = [
   "super_admin",
   "admin",
-  "operations",
-  "sales_vehicles",
   "sales_consigner",
   "accounts",
-  "support",
 ];
 
 export const CUSTOMER_WRITE_ROLES: Role[] = ["super_admin", "admin"];

@@ -43,14 +43,13 @@ function CompanyIdentityCard() {
   const [success, setSuccess] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: queryKeys.platformSetting("erp_default_consigner"),
-    queryFn: () => getPlatformSetting("erp_default_consigner"),
+    queryKey: queryKeys.platformSetting("company_identity"),
+    queryFn: () => getPlatformSetting("company_identity"),
   });
 
   useEffect(() => {
     if (data?.value) {
-      setConsignerName((data.value.consigner_name as string) ?? "Airavatl");
-      // Strip 91 prefix for display — user only sees 10-digit number
+      setConsignerName((data.value.name as string) ?? (data.value.consigner_name as string) ?? "Airavat Logistics");
       const raw = (data.value.phone as string) ?? "";
       setPhone(raw.replace(/^91/, ""));
     }
@@ -59,13 +58,13 @@ function CompanyIdentityCard() {
   const digits = phone.replace(/\D/g, "");
   const isValid =
     consignerName.trim().length >= 2 &&
-    digits.length === 10 && /^[6-9]/.test(digits);
+    (digits.length === 0 || (digits.length === 10 && /^[6-9]/.test(digits)));
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      updatePlatformSetting("erp_default_consigner", {
-        consigner_name: consignerName.trim(),
-        phone: "91" + digits,
+      updatePlatformSetting("company_identity", {
+        name: consignerName.trim(),
+        phone: digits.length === 10 ? "91" + digits : "",
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platform-settings"] });
@@ -138,7 +137,7 @@ function CompanyIdentityCard() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="phone" className="text-sm font-medium">
-                Phone Number <span className="text-red-500">*</span>
+                Phone Number <span className="text-gray-400 text-xs font-normal">(optional)</span>
               </Label>
               <div className="flex items-center gap-1.5">
                 <span className="text-sm text-gray-500 shrink-0">+91</span>
@@ -183,8 +182,14 @@ function CompanyIdentityCard() {
 const FEE_FIELDS = [
   {
     key: "commission_percentage",
-    label: "Platform Commission",
-    description: "Percentage added to the driver bid amount as platform commission",
+    label: "App Commission/Expected Commission",
+    description: "Suggested markup on driver bid. Used to calculate the expected trip amount shown to operations",
+    suffix: "%",
+  },
+  {
+    key: "minimum_commission_percentage",
+    label: "Minimum Commission",
+    description: "Lowest allowed markup on driver bid. Operations must enter a trip amount at least this % above the bid",
     suffix: "%",
   },
   {

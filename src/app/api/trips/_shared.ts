@@ -7,7 +7,6 @@ export const dynamic = "force-dynamic";
 const TRIP_ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
-  "sales_consigner",
   "operations",
   "accounts",
 ];

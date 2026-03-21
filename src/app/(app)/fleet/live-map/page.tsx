@@ -23,7 +23,8 @@ export default function LiveMapPage() {
   const query = useQuery({
     queryKey: queryKeys.appDriverLocations({ onlineOnly }),
     queryFn: () => listDriverLocations({ onlineOnly }),
-    refetchInterval: 30_000,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
   });
 
   const drivers = query.data?.items ?? [];

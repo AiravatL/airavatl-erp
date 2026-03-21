@@ -7,7 +7,6 @@ import type { Role } from "@/lib/types";
 
 const VERIFICATION_ALLOWED_ROLES: Role[] = [
   "sales_vehicles",
-  "operations",
   "admin",
   "super_admin",
 ];

@@ -23,7 +23,7 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin: "Full overview of operations, approvals, and analytics",
   operations: "Trip dispatch, fleet management, and driver coordination",
   sales_vehicles: "Vehicle sourcing, partner onboarding, and market rates",
-  sales_consigner: "Your customers, auctions, and collection follow-ups",
+  sales_consigner: "Customer CRM, consigner management, and collections",
   accounts: "Payments, settlements, and receivable aging",
   support: "Open tickets and follow-up tasks",
 };
@@ -232,7 +232,6 @@ function getQuickActions(role: Role) {
   switch (role) {
     case "sales_consigner":
       return [
-        { label: "New Auction", href: "/delivery-requests/new", icon: Plus },
         { label: "Customers", href: "/customers", icon: Users },
         { label: "CRM", href: "/consigner-crm", icon: TrendingUp },
       ];
@@ -244,21 +243,18 @@ function getQuickActions(role: Role) {
       ];
     case "operations":
       return [
+        { label: "New Auction", href: "/delivery-requests/new", icon: Plus },
         { label: "Trips", href: "/trips", icon: Truck },
         { label: "Live Map", href: "/fleet/live-map", icon: MapPin },
-        { label: "Verification", href: "/verification", icon: Users },
       ];
     case "accounts":
       return [
         { label: "Payments", href: "/payments", icon: CreditCard },
-        { label: "Reports", href: "/reports", icon: BarChart3 },
-        { label: "Customers", href: "/customers", icon: Users },
+        { label: "Receivables", href: "/receivables", icon: Receipt },
       ];
     case "support":
       return [
         { label: "Tickets", href: "/tickets", icon: TicketCheck },
-        { label: "Trips", href: "/trips", icon: Truck },
-        { label: "Customers", href: "/customers", icon: Users },
       ];
     default:
       return [

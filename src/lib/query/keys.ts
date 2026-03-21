@@ -78,6 +78,8 @@ export const queryKeys = {
   tripDriverLocation: (tripId: string) => ["trips", "driver-location", tripId] as const,
   paymentsQueue: (filters: { search?: string; status?: string; type?: string }) => ["payments", "queue", filters] as const,
   paymentProofUpload: (paymentRequestId: string) => ["payments", "proof-upload", paymentRequestId] as const,
+  receivableCollectionProof: (receivableId: string) => ["receivables", "proof-upload", "single", receivableId] as const,
+  receivableBulkCollectionProof: (consignerProfileId: string) => ["receivables", "proof-upload", "bulk", consignerProfileId] as const,
   appOverview: (filters: { from?: string; to?: string }) =>
     ["reports", "app-overview", filters] as const,
   appAuctions: (filters: { status?: string; requestType?: string; search?: string; limit?: number; offset?: number }) =>

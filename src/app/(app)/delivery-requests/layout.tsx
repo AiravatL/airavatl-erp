@@ -8,7 +8,7 @@ import type { Role } from "@/lib/types";
 const ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
-  "sales_consigner",
+  "operations",
 ];
 
 export default function DeliveryRequestsLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +21,7 @@ export default function DeliveryRequestsLayout({ children }: { children: React.R
         <Card>
           <CardContent className="p-6">
             <p className="text-sm text-gray-600">
-              Delivery Requests is available only to Sales Consigner and Admin roles.
+              Delivery Requests is available only to Operations and Admin roles.
             </p>
           </CardContent>
         </Card>

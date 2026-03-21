@@ -36,18 +36,17 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Auctions", href: "/delivery-requests", icon: PackagePlus, roles: ["super_admin", "admin", "sales_consigner"] },
-  { label: "Trips", href: "/trips", icon: Truck, roles: ["super_admin", "admin", "sales_consigner", "operations"] },
-  { label: "Customers", href: "/customers", icon: Users },
-  { label: "Fleet", href: "/vendors", icon: Building2 },
+  { label: "Auctions", href: "/delivery-requests", icon: PackagePlus, roles: ["super_admin", "admin", "operations"] },
+  { label: "Trips", href: "/trips", icon: Truck, roles: ["super_admin", "admin", "operations"] },
+  { label: "Fleet", href: "/vendors", icon: Building2, roles: ["super_admin", "admin", "operations", "sales_vehicles"] },
   { label: "Live Map", href: "/fleet/live-map", icon: MapPin, roles: ["super_admin", "admin", "operations"] },
   { label: "Payments", href: "/payments", icon: CreditCard, roles: ["super_admin", "admin", "accounts"] },
+  { label: "Receivables", href: "/receivables", icon: Receipt, roles: ["super_admin", "admin", "accounts"] },
+  { label: "Customers", href: "/customers", icon: Users, roles: ["super_admin", "admin", "sales_consigner"] },
   { label: "Consigner CRM", href: "/consigner-crm", icon: TrendingUp, roles: ["super_admin", "admin", "sales_consigner"] },
-  { label: "Partner Verification", href: "/verification", icon: ShieldCheck, roles: ["super_admin", "admin", "sales_vehicles", "operations"] },
-  { label: "Receivables", href: "/receivables", icon: Receipt, roles: ["super_admin", "admin", "sales_consigner", "sales_vehicles", "accounts"] },
-  { label: "Rate Library", href: "/rates", icon: BookOpen },
-  { label: "Tickets", href: "/tickets", icon: TicketCheck },
-  { label: "Reports", href: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "accounts", "operations"] },
+  { label: "Partner Verification", href: "/verification", icon: ShieldCheck, roles: ["super_admin", "admin", "sales_vehicles"] },
+  { label: "Rate Library", href: "/rates", icon: BookOpen, roles: ["super_admin", "admin", "operations", "sales_consigner", "sales_vehicles"] },
+  { label: "Reports", href: "/reports", icon: BarChart3, roles: ["super_admin", "admin"] },
   { label: "Administration", href: "/admin/users", icon: ShieldCheck, roles: ["super_admin", "admin"] },
 ];
 

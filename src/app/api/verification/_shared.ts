@@ -8,7 +8,6 @@ export const VERIFICATION_ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
   "sales_vehicles",
-  "operations",
 ];
 
 export const VERIFICATION_REVOKE_ROLES: Role[] = ["super_admin", "admin"];
