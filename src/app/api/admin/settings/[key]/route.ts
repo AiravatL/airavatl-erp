@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireServerActor } from "@/lib/auth/server-actor";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isMissingRpcError } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -18,15 +18,9 @@ export async function GET(
     return NextResponse.json({ ok: false, message: "Setting key is required" }, { status: 400 });
   }
 
-  const adminClient = getSupabaseAdminClient();
-  if (!adminClient) {
-    return NextResponse.json({ ok: false, message: "Admin client not configured" }, { status: 500 });
-  }
-
-  const { data, error } = await adminClient
-    .schema("erp" as never)
-    .from("policy_settings" as never)
-    .select("setting_key, setting_value, description, updated_at")
+  const { data, error } = await actorResult.supabase
+    .from("platform_settings" as never)
+    .select("setting_key, setting_value, description, updated_at" as never)
     .eq("setting_key" as never, key)
     .maybeSingle();
 
@@ -35,11 +29,10 @@ export async function GET(
   }
 
   if (!data) {
-    // Return empty default if setting doesn't exist yet
     return NextResponse.json({ ok: true, data: { key, value: {}, description: null, updated_at: null } });
   }
 
-  const row = data as Record<string, unknown>;
+  const row = data as unknown as Record<string, unknown>;
   return NextResponse.json({ ok: true, data: {
     key: row.setting_key,
     value: row.setting_value,
@@ -65,22 +58,16 @@ export async function PUT(
     return NextResponse.json({ ok: false, message: "Value object is required" }, { status: 400 });
   }
 
-  const adminClient = getSupabaseAdminClient();
-  if (!adminClient) {
-    return NextResponse.json({ ok: false, message: "Admin client not configured" }, { status: 500 });
-  }
-
-  const { error } = await adminClient
-    .schema("erp" as never)
-    .from("policy_settings" as never)
-    .upsert({
-      setting_key: key,
-      setting_value: body.value,
-      updated_by: actorResult.actor.id,
-      updated_at: new Date().toISOString(),
-    } as never, { onConflict: "setting_key" } as never);
+  const { data, error } = await actorResult.supabase.rpc("admin_update_platform_setting_v1", {
+    p_setting_key: key,
+    p_setting_value: body.value,
+    p_actor_user_id: actorResult.actor.id,
+  } as never);
 
   if (error) {
+    if (isMissingRpcError(error)) {
+      return NextResponse.json({ ok: false, message: "Missing RPC" }, { status: 500 });
+    }
     return NextResponse.json({ ok: false, message: error.message ?? "Unable to update setting" }, { status: 500 });
   }
 
