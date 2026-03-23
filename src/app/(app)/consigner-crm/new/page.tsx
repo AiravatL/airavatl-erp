@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createConsignerLead } from "@/lib/api/consigner-crm";
+import { createConsignerLead, getConsignerLeadById, updateConsignerLead } from "@/lib/api/consigner-crm";
 import { listVehicleMasterOptions } from "@/lib/api/vehicle-master";
 import { queryKeys } from "@/lib/query/keys";
 import { LEAD_SOURCE_LABELS } from "@/lib/types";
@@ -36,9 +36,14 @@ function fieldError(value: string, touched: boolean, validate: () => string | nu
 
 export default function AddLeadPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
+
   const [error, setError] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [formLoaded, setFormLoaded] = useState(false);
   const [form, setForm] = useState({
     companyName: "",
     companyAddress: "",
@@ -109,6 +114,36 @@ export default function AddLeadPage() {
     form.source &&
     (!form.email || isValidEmail(normalizeSingleLineForSubmit(form.email, FIELD_LIMITS.email)));
 
+  // Fetch lead data for edit mode
+  const editQuery = useQuery({
+    queryKey: ["consigner-crm", "lead", editId],
+    queryFn: () => getConsignerLeadById(editId!),
+    enabled: isEditMode,
+  });
+
+  // Pre-fill form when edit data loads
+  useEffect(() => {
+    if (!editQuery.data || formLoaded) return;
+    const d = editQuery.data;
+    setForm({
+      companyName: d.companyName ?? "",
+      companyAddress: d.companyAddress ?? "",
+      contactPerson: d.contactPerson ?? "",
+      contactPersonDesignation: d.contactPersonDesignation ?? "",
+      natureOfBusiness: d.natureOfBusiness ?? "",
+      phone: d.phone ?? "",
+      email: d.email ?? "",
+      source: d.source ?? "",
+      estimatedValue: d.estimatedValue ? String(d.estimatedValue) : "",
+      route: d.route ?? "",
+      vehicleRequirements: d.vehicleRequirements ?? [],
+      priority: d.priority ?? "medium",
+      notes: d.notes ?? "",
+      nextFollowUp: d.nextFollowUp ?? "",
+    });
+    setFormLoaded(true);
+  }, [editQuery.data, formLoaded]);
+
   const vehicleMasterQuery = useQuery({
     queryKey: queryKeys.vehicleMasterOptions,
     queryFn: listVehicleMasterOptions,
@@ -119,30 +154,31 @@ export default function AddLeadPage() {
     ? Array.from(new Set(vehicleMaster.map((type) => type.name).filter(Boolean)))
     : [];
 
+  const payload = () => ({
+    companyName: normalizeSingleLineForSubmit(form.companyName, FIELD_LIMITS.companyName),
+    companyAddress: normalizeSingleLineForSubmit(form.companyAddress, FIELD_LIMITS.address) || undefined,
+    contactPerson: normalizeSingleLineForSubmit(form.contactPerson, FIELD_LIMITS.fullName),
+    contactPersonDesignation: normalizeSingleLineForSubmit(form.contactPersonDesignation, FIELD_LIMITS.fullName) || undefined,
+    natureOfBusiness: normalizeSingleLineForSubmit(form.natureOfBusiness, FIELD_LIMITS.companyName) || undefined,
+    phone: form.phone.trim(),
+    email: normalizeSingleLineForSubmit(form.email, FIELD_LIMITS.email) || undefined,
+    source: form.source as LeadSource,
+    estimatedValue: form.estimatedValue ? Number(form.estimatedValue) : undefined,
+    route: normalizeSingleLineForSubmit(form.route, FIELD_LIMITS.location) || undefined,
+    vehicleRequirements: form.vehicleRequirements,
+    priority: (form.priority as LeadPriority) || "medium",
+    notes: normalizeMultilineForSubmit(form.notes, FIELD_LIMITS.notes) || undefined,
+    nextFollowUp: form.nextFollowUp || null,
+  });
+
   const createMutation = useMutation({
-    mutationFn: () =>
-      createConsignerLead({
-        companyName: normalizeSingleLineForSubmit(form.companyName, FIELD_LIMITS.companyName),
-        companyAddress: normalizeSingleLineForSubmit(form.companyAddress, FIELD_LIMITS.address) || undefined,
-        contactPerson: normalizeSingleLineForSubmit(form.contactPerson, FIELD_LIMITS.fullName),
-        contactPersonDesignation: normalizeSingleLineForSubmit(form.contactPersonDesignation, FIELD_LIMITS.fullName) || undefined,
-        natureOfBusiness: normalizeSingleLineForSubmit(form.natureOfBusiness, FIELD_LIMITS.companyName) || undefined,
-        phone: form.phone.trim(),
-        email: normalizeSingleLineForSubmit(form.email, FIELD_LIMITS.email) || undefined,
-        source: form.source as LeadSource,
-        estimatedValue: form.estimatedValue ? Number(form.estimatedValue) : undefined,
-        route: normalizeSingleLineForSubmit(form.route, FIELD_LIMITS.location) || undefined,
-        vehicleRequirements: form.vehicleRequirements,
-        priority: (form.priority as LeadPriority) || "medium",
-        notes: normalizeMultilineForSubmit(form.notes, FIELD_LIMITS.notes) || undefined,
-        nextFollowUp: form.nextFollowUp || null,
-      }),
+    mutationFn: () => isEditMode ? updateConsignerLead(editId!, payload()) : createConsignerLead(payload()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["consigner-crm"] });
-      router.push("/consigner-crm");
+      router.push(isEditMode ? `/consigner-crm/${editId}` : "/consigner-crm");
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Failed to create lead");
+      setError(err instanceof Error ? err.message : isEditMode ? "Failed to update lead" : "Failed to create lead");
     },
   });
 
@@ -155,7 +191,7 @@ export default function AddLeadPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Add New Lead" description="Create a new consigner lead to track in your pipeline" />
+      <PageHeader title={isEditMode ? "Edit Lead" : "Add New Lead"} description={isEditMode ? "Update lead information" : "Create a new consigner lead to track in your pipeline"} />
 
       <Card>
         <CardContent className="p-4 sm:p-6">
@@ -369,7 +405,7 @@ export default function AddLeadPage() {
               </Button>
               <Button onClick={handleSubmit} disabled={createMutation.isPending} className="h-9 text-sm">
                 {createMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-                Save Lead
+                {isEditMode ? "Update Lead" : "Save Lead"}
               </Button>
             </div>
           </div>

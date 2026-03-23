@@ -327,15 +327,64 @@ export default function PaymentsPage() {
       )}
 
       {!queueQuery.isLoading && !queueQuery.isError && activeList.length > 0 && (
-        <div className="space-y-2">
-          {activeList.map((payment) => (
-            <QueueCard
-              key={payment.id}
-              payment={payment}
-              canMarkPaid={canManagePayments}
-              onMarkPaid={setSelectedPayment}
-            />
-          ))}
+        <div className="space-y-3">
+          {(() => {
+            // Group payments by trip
+            const grouped = new Map<string, PaymentQueueItem[]>();
+            for (const p of activeList) {
+              const key = p.tripId || p.id;
+              if (!grouped.has(key)) grouped.set(key, []);
+              grouped.get(key)!.push(p);
+            }
+            return [...grouped.entries()].map(([tripId, payments]) => {
+              const first = payments[0];
+              const erp = isErpPayment(first);
+              return (
+                <Card key={tripId}>
+                  <CardContent className="p-3 sm:p-4">
+                    {/* Trip header */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-semibold text-gray-900">{first.tripCode}</span>
+                      {erp && <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-600 font-medium">ERP</span>}
+                      <span className="text-xs text-gray-500">Pay to: <span className="font-medium text-gray-900">{first.beneficiary || "N/A"}</span></span>
+                    </div>
+                    {/* Payment rows inside this trip */}
+                    <div className="space-y-1.5">
+                      {payments.map((payment) => (
+                        <div key={payment.id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600 capitalize font-medium">{payment.type.replace("_", " ")}</span>
+                            <span className="text-sm font-semibold text-gray-900">{formatCurrency(payment.amount)}</span>
+                            <StatusBadge
+                              status={payment.status === "completed" ? "paid" : payment.status}
+                              label={STATUS_LABELS[payment.status] ?? payment.status}
+                              variant="payment"
+                            />
+                          </div>
+                          {canManagePayments && isActionable(payment) && (
+                            <Button size="sm" className="h-7 gap-1 text-[11px]" onClick={() => setSelectedPayment(payment)}>
+                              <Upload className="h-3 w-3" /> Mark Paid
+                            </Button>
+                          )}
+                          {payment.paidProofObjectKey && (
+                            <SignedImagePreview objectKey={payment.paidProofObjectKey} label="Proof" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Bank details (show once per trip) */}
+                    {(first.bankAccountNumber || first.upiId) && (
+                      <div className="mt-2 rounded-md bg-gray-50 p-2 space-y-1 text-xs">
+                        {first.bankAccountHolder && <div className="flex justify-between"><span className="text-gray-500">Account</span><span className="font-medium text-gray-900">{first.bankAccountHolder} · {first.bankAccountNumber}</span></div>}
+                        {first.bankIfsc && <div className="flex justify-between"><span className="text-gray-500">IFSC</span><span className="font-medium text-gray-900">{first.bankIfsc}</span></div>}
+                        {first.upiId && <div className="flex justify-between"><span className="text-gray-500">UPI</span><span className="font-medium text-gray-900">{first.upiId}</span></div>}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            });
+          })()}
         </div>
       )}
 

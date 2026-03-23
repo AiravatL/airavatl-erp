@@ -13,6 +13,7 @@ interface TripRow {
   trip_code: string;
   route: string | null;
   current_stage: string;
+  trip_amount: number | string | null;
   schedule_date: string | null;
   vehicle_number: string | null;
   created_at: string;
@@ -60,6 +61,7 @@ export async function GET(request: Request, context: RouteParams) {
       tripCode: row.trip_code,
       route: row.route,
       currentStage: row.current_stage,
+      tripAmount: Number(row.trip_amount ?? 0),
       scheduleDate: row.schedule_date,
       vehicleNumber: row.vehicle_number,
       createdAt: row.created_at,

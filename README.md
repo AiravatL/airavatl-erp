@@ -63,7 +63,29 @@ pnpm lint
 pnpm exec tsc --noEmit
 pnpm build
 pnpm start
+pnpm preview
+pnpm deploy
 ```
+
+## Cloudflare Workers Deploy
+- This ERP is a full-stack Next.js app and should be deployed on Cloudflare Workers, not as a static Pages export.
+- The repo is a monorepo, so set the Cloudflare project root directory to `erp`.
+- Required runtime env vars:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `NEXT_PUBLIC_SUPABASE_DB_SCHEMA`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `R2_PRESIGN_WORKER_URL`
+- Required local setup:
+```bash
+pnpm install
+pnpm preview
+```
+- Deploy command:
+```bash
+pnpm deploy
+```
+- The ERP app still depends on the separate R2 presign worker. Deploy that worker separately and point `R2_PRESIGN_WORKER_URL` to it.
 
 ## Database / Migrations
 - SQL migrations are in `supabase/migrations/`.

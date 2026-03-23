@@ -18,13 +18,32 @@ export interface CustomerListItem {
   updatedAt: string;
 }
 
-export type CustomerDetail = CustomerListItem;
+export interface CustomerDetail extends CustomerListItem {
+  panNumber: string | null;
+  natureOfBusiness: string | null;
+  contactDesignation: string | null;
+  routeSummary: string | null;
+  vehicleRequirements: string[];
+  estimatedMonthlyRevenue: number | null;
+  tags: string[];
+  source: string | null;
+  internalNotes: string | null;
+  phone: string | null;
+  email: string | null;
+  contactName: string | null;
+  businessName: string | null;
+  totalTripsCount: number;
+  totalBilled: number;
+  overdueAmount: number;
+  totalReceived: number;
+}
 
 export interface CustomerTripItem {
   id: string;
   tripCode: string;
   route: string | null;
-  currentStage: TripStage;
+  currentStage: string;
+  tripAmount: number;
   scheduleDate: string | null;
   vehicleNumber: string | null;
   createdAt: string;
@@ -36,9 +55,11 @@ export interface CustomerReceivableItem {
   tripId: string;
   tripCode: string | null;
   amount: number;
+  amountReceived: number;
+  amountOutstanding: number;
   dueDate: string | null;
-  collectedStatus: "pending" | "partial" | "collected" | "overdue";
-  agingBucket: "0-7" | "8-15" | "16-30" | "30+";
+  collectedStatus: "pending" | "partial" | "collected" | "overdue" | "written_off";
+  agingBucket: string;
   followUpStatus: string | null;
   followUpNotes: string | null;
   collectedAt: string | null;
@@ -152,6 +173,28 @@ export async function listCustomerTrips(
       cache: "no-store",
     },
   );
+}
+
+export interface UpdateCustomerInput {
+  registeredName?: string;
+  billingAddress?: string;
+  gstin?: string;
+  panNumber?: string;
+  natureOfBusiness?: string;
+  contactDesignation?: string;
+  routeSummary?: string;
+  creditDays?: number;
+  creditLimit?: number;
+  internalNotes?: string;
+  active?: boolean;
+}
+
+export async function updateCustomer(customerId: string, input: UpdateCustomerInput) {
+  return apiRequest(`/api/customers/${customerId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 
 export async function listCustomerReceivables(

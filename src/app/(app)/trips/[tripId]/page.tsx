@@ -7,6 +7,9 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   getAuctionTrip,
   listTripPaymentRequests,
@@ -24,10 +27,11 @@ import {
 import type { AppTripStatus, VehicleTypeRequired } from "@/lib/types";
 import { formatCurrency, formatDate, formatRelativeTime } from "@/lib/formatters";
 import { apiRequest } from "@/lib/api/http";
+import { reviewTripProof } from "@/lib/api/trips";
 import {
   ArrowLeft, Loader2, MapPin, Truck, Phone, User, Package,
   Route, DollarSign, Clock, ExternalLink, AlertTriangle,
-  CircleDot, XCircle, Camera, Trash2, Banknote,
+  CircleDot, XCircle, Camera, Trash2, Banknote, Check, X,
 } from "lucide-react";
 import { TripTimeline } from "./_components/trip-timeline";
 import { SignedImagePreview } from "@/components/shared/signed-image-preview";
@@ -64,6 +68,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [rejectProofId, setRejectProofId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const isOps = user ? OPS_ROLES.has(user.role) : false;
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -98,6 +104,17 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
   const canRequestPayment = (isOps || isAdmin) && isErp;
   const needsAdvanceRequest = canRequestPayment && status === "waiting_for_advance";
   const needsFinalRequest = canRequestPayment && status === "waiting_for_final";
+
+  const proofReviewMutation = useMutation({
+    mutationFn: (input: { proofId: string; action: "accept" | "reject"; rejectionReason?: string }) =>
+      reviewTripProof(tripId, input),
+    onSuccess: () => {
+      setRejectProofId(null);
+      setRejectReason("");
+      queryClient.invalidateQueries({ queryKey: queryKeys.tripLoadingProofs(tripId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) });
+    },
+  });
 
   const requestPaymentMutation = useMutation({
     mutationFn: (paymentType: "advance" | "final") =>
@@ -421,13 +438,11 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                   <div>
                     <p className="text-[11px] text-gray-400 uppercase mb-1.5">Loading Proof ({loadingProofs.length})</p>
                     {loadingProofs.map((proof) => (
-                      <div key={proof.id} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50/50 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-xs text-gray-900 truncate">{proof.fileName}</p>
-                          <p className="text-[11px] text-gray-400">{proof.uploadedByName} · {formatDate(proof.createdAt)}</p>
-                        </div>
-                        {proof.objectKey && <SignedImagePreview objectKey={proof.objectKey} label="Loading Proof" source="trip" />}
-                      </div>
+                      <ProofCard key={proof.id} proof={proof} label="Loading Proof" isErp={isErpTrip}
+                        canReview={(isOps || isAdmin) && isErpTrip}
+                        onAccept={() => proofReviewMutation.mutate({ proofId: proof.id, action: "accept" })}
+                        onReject={() => { setRejectProofId(proof.id); setRejectReason(""); proofReviewMutation.reset(); }}
+                        isPending={proofReviewMutation.isPending} />
                     ))}
                   </div>
                 )}
@@ -435,13 +450,11 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                   <div>
                     <p className="text-[11px] text-gray-400 uppercase mb-1.5">POD — Proof of Delivery ({podProofs.length})</p>
                     {podProofs.map((proof) => (
-                      <div key={proof.id} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50/50 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-xs text-gray-900 truncate">{proof.fileName}</p>
-                          <p className="text-[11px] text-gray-400">{proof.uploadedByName} · {formatDate(proof.createdAt)}</p>
-                        </div>
-                        {proof.objectKey && <SignedImagePreview objectKey={proof.objectKey} label="Proof of Delivery" source="trip" />}
-                      </div>
+                      <ProofCard key={proof.id} proof={proof} label="Proof of Delivery" isErp={isErpTrip}
+                        canReview={(isOps || isAdmin) && isErpTrip}
+                        onAccept={() => proofReviewMutation.mutate({ proofId: proof.id, action: "accept" })}
+                        onReject={() => { setRejectProofId(proof.id); setRejectReason(""); proofReviewMutation.reset(); }}
+                        isPending={proofReviewMutation.isPending} />
                     ))}
                   </div>
                 )}
@@ -575,6 +588,29 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
       </div>
 
       {/* Admin Delete Dialog */}
+      {/* Reject Proof Dialog */}
+      <Dialog open={!!rejectProofId} onOpenChange={(o) => { if (!o) setRejectProofId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle className="text-base">Reject Proof</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Reason for rejection *</Label>
+              <Input className="h-8 text-sm" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g. Image is blurry, wrong document, etc." maxLength={300} />
+            </div>
+            {proofReviewMutation.isError && <p className="text-sm text-red-600">{proofReviewMutation.error instanceof Error ? proofReviewMutation.error.message : "Failed"}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setRejectProofId(null)}>Cancel</Button>
+            <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={!rejectReason.trim() || proofReviewMutation.isPending}
+              onClick={() => rejectProofId && proofReviewMutation.mutate({ proofId: rejectProofId, action: "reject", rejectionReason: rejectReason.trim() })}>
+              {proofReviewMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <X className="h-3.5 w-3.5 mr-1" />}
+              Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AdminDeleteDialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
@@ -615,6 +651,54 @@ function FinRow({ label, value, valueClass }: { label: string; value: string; va
     <div className="flex justify-between gap-3">
       <span className="text-xs text-gray-500">{label}</span>
       <span className={`text-sm text-right ${valueClass ?? "text-gray-900"}`}>{value}</span>
+    </div>
+  );
+}
+
+function ProofCard({ proof, label, isErp, canReview, onAccept, onReject, isPending }: {
+  proof: { id: string; fileName: string; objectKey: string; uploadedByName: string; createdAt: string;
+    reviewStatus: string; reviewedByName: string | null; reviewedAt: string | null; rejectionReason: string | null };
+  label: string; isErp: boolean; canReview: boolean;
+  onAccept: () => void; onReject: () => void; isPending: boolean;
+}) {
+  const isRejected = proof.reviewStatus === "rejected";
+  const isAccepted = proof.reviewStatus === "accepted";
+  const isPendingReview = proof.reviewStatus === "pending";
+
+  return (
+    <div className={`rounded-md border px-3 py-2 mb-1.5 ${isRejected ? "border-red-200 bg-red-50/50" : isAccepted ? "border-emerald-200 bg-emerald-50/50" : "border-gray-100 bg-gray-50/50"}`}>
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-gray-900 truncate">{proof.fileName}</p>
+            {isAccepted && <Badge variant="outline" className="border-0 text-[9px] bg-emerald-100 text-emerald-700 shrink-0">Accepted</Badge>}
+            {isRejected && <Badge variant="outline" className="border-0 text-[9px] bg-red-100 text-red-700 shrink-0">Rejected</Badge>}
+            {isPendingReview && isErp && <Badge variant="outline" className="border-0 text-[9px] bg-amber-100 text-amber-700 shrink-0">Pending Review</Badge>}
+          </div>
+          <p className="text-[11px] text-gray-400">{proof.uploadedByName} · {formatDate(proof.createdAt)}</p>
+          {isRejected && proof.rejectionReason && (
+            <p className="text-[11px] text-red-600 mt-0.5">Reason: {proof.rejectionReason}</p>
+          )}
+          {(isAccepted || isRejected) && proof.reviewedByName && (
+            <p className="text-[10px] text-gray-400">Reviewed by {proof.reviewedByName}{proof.reviewedAt ? ` · ${formatDate(proof.reviewedAt)}` : ""}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {proof.objectKey && <SignedImagePreview objectKey={proof.objectKey} label={label} source="trip" />}
+          {canReview && isPendingReview && (
+            <>
+              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                disabled={isPending} onClick={onAccept}>
+                <Check className="h-3 w-3" /> Accept
+              </Button>
+              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 text-red-700 border-red-200 hover:bg-red-50"
+                disabled={isPending} onClick={onReject}>
+                <X className="h-3 w-3" /> Reject
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

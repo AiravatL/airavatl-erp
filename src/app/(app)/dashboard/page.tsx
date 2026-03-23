@@ -15,7 +15,7 @@ import type { Role } from "@/lib/types";
 import {
   Truck, CreditCard, Receipt, ArrowRight, Plus,
   TicketCheck, Users, TrendingUp, PackagePlus,
-  MapPin, BarChart3,
+  MapPin, BarChart3, ShieldCheck,
 } from "lucide-react";
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -83,28 +83,50 @@ export default function DashboardPage() {
       />
 
       {/* Quick actions */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {quickActions.map((action) => (
-          <Link key={action.href + action.label} href={action.href}>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0">
-              <action.icon className="h-3.5 w-3.5" />
-              {action.label}
-            </Button>
-          </Link>
-        ))}
-      </div>
+      {quickActions.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {quickActions.map((action) => (
+            <Link key={action.href + action.label} href={action.href}>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0">
+                <action.icon className="h-3.5 w-3.5" />
+                {action.label}
+              </Button>
+            </Link>
+          ))}
+        </div>
+      )}
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard icon={Truck} iconBg="bg-blue-50" iconColor="text-blue-600"
-          value={metrics?.tripsCreated ?? 0} label="Trips (30d)" />
-        <StatCard icon={PackagePlus} iconBg="bg-indigo-50" iconColor="text-indigo-600"
-          value={metrics?.deliveryRequests ?? 0} label="Auctions (30d)" />
-        <StatCard icon={Users} iconBg="bg-emerald-50" iconColor="text-emerald-600"
-          value={metrics?.totalUsers ?? 0} label="Total Users" />
-        <StatCard icon={MapPin} iconBg="bg-cyan-50" iconColor="text-cyan-600"
-          value={metrics?.liveDrivers ?? 0} label="Live Drivers" />
-      </div>
+      {/* Stats cards — role-aware */}
+      {role === "sales_vehicles" ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatCard icon={ShieldCheck} iconBg="bg-amber-50" iconColor="text-amber-600"
+            value={metrics?.pendingVerifications ?? 0} label="Pending Verifications" />
+          <StatCard icon={Users} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+            value={metrics?.totalUsers ?? 0} label="Total Partners" />
+          <StatCard icon={MapPin} iconBg="bg-cyan-50" iconColor="text-cyan-600"
+            value={metrics?.liveDrivers ?? 0} label="Live Drivers" />
+        </div>
+      ) : role === "accounts" ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatCard icon={CreditCard} iconBg="bg-purple-50" iconColor="text-purple-600"
+            value={metrics?.paymentsCount ?? 0} label="Payments (30d)" />
+          <StatCard icon={Truck} iconBg="bg-blue-50" iconColor="text-blue-600"
+            value={metrics?.tripsCreated ?? 0} label="Trips (30d)" />
+          <StatCard icon={Users} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+            value={metrics?.totalUsers ?? 0} label="Total Users" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard icon={Truck} iconBg="bg-blue-50" iconColor="text-blue-600"
+            value={metrics?.tripsCreated ?? 0} label="Trips (30d)" />
+          <StatCard icon={PackagePlus} iconBg="bg-indigo-50" iconColor="text-indigo-600"
+            value={metrics?.deliveryRequests ?? 0} label="Auctions (30d)" />
+          <StatCard icon={Users} iconBg="bg-emerald-50" iconColor="text-emerald-600"
+            value={metrics?.totalUsers ?? 0} label="Total Users" />
+          <StatCard icon={MapPin} iconBg="bg-cyan-50" iconColor="text-cyan-600"
+            value={metrics?.liveDrivers ?? 0} label="Live Drivers" />
+        </div>
+      )}
 
       {showFinancials && metrics && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -231,10 +253,7 @@ function QuickLink({ href, icon: Icon, label, description }: {
 function getQuickActions(role: Role) {
   switch (role) {
     case "sales_consigner":
-      return [
-        { label: "Customers", href: "/customers", icon: Users },
-        { label: "CRM", href: "/consigner-crm", icon: TrendingUp },
-      ];
+      return [];
     case "sales_vehicles":
       return [
         { label: "Fleet", href: "/vendors", icon: Users },

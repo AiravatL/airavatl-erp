@@ -12,6 +12,10 @@ interface ProofRow {
   file_size_bytes: number | string;
   uploaded_by_id: string;
   uploaded_by_name: string;
+  review_status: string;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
   created_at: string;
 }
 
@@ -51,6 +55,10 @@ export async function GET(
     fileSizeBytes: toNumber(row.file_size_bytes),
     uploadedById: row.uploaded_by_id,
     uploadedByName: row.uploaded_by_name,
+    reviewStatus: row.review_status ?? "pending",
+    reviewedByName: row.reviewed_by_name ?? null,
+    reviewedAt: row.reviewed_at ?? null,
+    rejectionReason: row.rejection_reason ?? null,
     createdAt: row.created_at,
   }));
 

@@ -156,6 +156,10 @@ export interface TripLoadingProofItem {
   fileSizeBytes: number;
   uploadedById: string;
   uploadedByName: string;
+  reviewStatus: "pending" | "accepted" | "rejected";
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
   createdAt: string;
 }
 
@@ -523,6 +527,17 @@ export async function confirmTripLoadingProofUpload(
   },
 ): Promise<unknown> {
   return apiRequest<unknown>(`/api/trips/${tripId}/loading-proof/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function reviewTripProof(
+  tripId: string,
+  input: { proofId: string; action: "accept" | "reject"; rejectionReason?: string },
+) {
+  return apiRequest(`/api/trips/${tripId}/proof-review`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

@@ -23,6 +23,7 @@ export interface AppOverview {
     paymentsVolume: number;
     platformRevenue: number;
     totalPayouts: number;
+    pendingVerifications: number;
   };
   usersByType: BreakdownItem[];
   tripsByStatus: BreakdownItem[];
@@ -170,6 +171,7 @@ function normalizeOverview(raw: Record<string, unknown>): AppOverview {
       paymentsVolume: toNum(m.paymentsVolume ?? m.payments_volume),
       platformRevenue: toNum(m.platformRevenue ?? m.platform_revenue),
       totalPayouts: toNum(m.driverPayoutVolume ?? m.total_payouts),
+      pendingVerifications: toNum(m.pendingVerifications ?? m.pending_verifications),
     },
     usersByType: normalizeBreakdown(bd.usersByType ?? raw.users_by_type),
     tripsByStatus: normalizeBreakdown(bd.tripsByStatus ?? raw.trips_by_status),

@@ -25,6 +25,7 @@ import {
   addConsignerLeadActivity,
   moveConsignerLeadStage,
   winAndConvertConsignerLead,
+  updateConsignerLead,
 } from "@/lib/api/consigner-crm";
 import { queryKeys } from "@/lib/query/keys";
 import { formatCurrency, formatDate } from "@/lib/formatters";
@@ -36,7 +37,7 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/validation/cli
 import {
   ArrowLeft, Phone, Mail, MapPin, IndianRupee, Truck, Calendar,
   MessageSquare, PhoneCall, Video, StickyNote, ArrowRightLeft,
-  Loader2, AlertTriangle, User,
+  Loader2, AlertTriangle, User, Pencil, CheckCircle,
 } from "lucide-react";
 
 const STAGE_COLORS: Record<LeadStage, string> = {
@@ -86,6 +87,11 @@ export default function LeadDetailPage() {
   const [newActivity, setNewActivity] = useState("");
   const [activityType, setActivityType] = useState<string>("note");
 
+  // Follow-up completion
+  const [showFollowUpDone, setShowFollowUpDone] = useState(false);
+  const [followUpRemarks, setFollowUpRemarks] = useState("");
+  const [nextFollowUpDate, setNextFollowUpDate] = useState("");
+
   // Win-convert dialog state
   const [showWinConvert, setShowWinConvert] = useState(false);
   const [winConvertForm, setWinConvertForm] = useState({
@@ -120,6 +126,26 @@ export default function LeadDetailPage() {
       }),
     onSuccess: () => {
       setNewActivity("");
+      invalidateAll();
+    },
+  });
+
+  const completeFollowUpMutation = useMutation({
+    mutationFn: async () => {
+      // 1. Add activity with follow-up remarks
+      await addConsignerLeadActivity(leadId, {
+        type: "note" as LeadActivityType,
+        description: `Follow-up completed: ${followUpRemarks.trim()}`,
+      });
+      // 2. Update next follow-up date (clear or set new)
+      await updateConsignerLead(leadId, {
+        nextFollowUp: nextFollowUpDate || null,
+      });
+    },
+    onSuccess: () => {
+      setShowFollowUpDone(false);
+      setFollowUpRemarks("");
+      setNextFollowUpDate("");
       invalidateAll();
     },
   });
@@ -229,6 +255,13 @@ export default function LeadDetailPage() {
             >
               Mark Lost
             </Button>
+          )}
+          {!isConverted && lead.stage !== "won" && lead.stage !== "lost" && (
+            <Link href={`/consigner-crm/new?edit=${leadId}`}>
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </Button>
+            </Link>
           )}
           {isConverted && (
             <Badge variant="outline" className="border-0 text-xs bg-emerald-50 text-emerald-700">
@@ -342,6 +375,47 @@ export default function LeadDetailPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Follow-up Completion Dialog */}
+      <Dialog open={showFollowUpDone} onOpenChange={setShowFollowUpDone}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Complete Follow-up</DialogTitle>
+            <DialogDescription>
+              Mark the follow-up for {lead.companyName} as completed and optionally schedule the next one.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Remarks / Outcome *</Label>
+              <Textarea
+                value={followUpRemarks}
+                onChange={(e) => setFollowUpRemarks(e.target.value.slice(0, 500))}
+                placeholder="What was discussed? What's the outcome?"
+                rows={3} className="text-sm resize-none" maxLength={500}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Schedule Next Follow-up <span className="text-gray-400 font-normal">(optional)</span></Label>
+              <Input type="date" className="h-8 text-sm" value={nextFollowUpDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setNextFollowUpDate(e.target.value)} />
+              <p className="text-[11px] text-gray-400">Leave empty to clear the follow-up</p>
+            </div>
+            {completeFollowUpMutation.isError && (
+              <p className="text-sm text-red-600">{completeFollowUpMutation.error instanceof Error ? completeFollowUpMutation.error.message : "Failed"}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowFollowUpDone(false)}>Cancel</Button>
+            <Button size="sm" className="h-8 text-xs" disabled={!followUpRemarks.trim() || completeFollowUpMutation.isPending}
+              onClick={() => completeFollowUpMutation.mutate()}>
+              {completeFollowUpMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
+              Complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Details card */}
         <Card className="lg:col-span-1">
@@ -393,9 +467,15 @@ export default function LeadDetailPage() {
                 </div>
               )}
               {lead.nextFollowUp && (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                  Follow-up: {formatDate(lead.nextFollowUp)}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Calendar className="h-3.5 w-3.5 text-amber-500" />
+                    Follow-up: {formatDate(lead.nextFollowUp)}
+                  </div>
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                    onClick={() => { setShowFollowUpDone(true); setFollowUpRemarks(""); setNextFollowUpDate(""); }}>
+                    <CheckCircle className="h-3 w-3" /> Done
+                  </Button>
                 </div>
               )}
             </div>

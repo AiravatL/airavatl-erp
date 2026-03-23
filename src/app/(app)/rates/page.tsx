@@ -70,7 +70,8 @@ function validateRateCommentInput(value: string): { normalized: string; error: s
 
 export default function AllRatesPage() {
   const { user } = useAuth();
-  const [search, setSearch] = useState("");
+  const [fromSearch, setFromSearch] = useState("");
+  const [toSearch, setToSearch] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
@@ -83,15 +84,13 @@ export default function AllRatesPage() {
   const filtered = useMemo(
     () =>
       rates.filter((rate) => {
-        const matchesSearch =
-          !search ||
-          rate.fromLocation.toLowerCase().includes(search.toLowerCase()) ||
-          rate.toLocation.toLowerCase().includes(search.toLowerCase());
+        const matchesFrom = !fromSearch || rate.fromLocation.toLowerCase().includes(fromSearch.toLowerCase());
+        const matchesTo = !toSearch || rate.toLocation.toLowerCase().includes(toSearch.toLowerCase());
         const matchesVehicle = vehicleFilter === "All" || rate.vehicleType === vehicleFilter;
         const matchesCategory = categoryFilter === "all" || rate.rateCategory === categoryFilter;
-        return matchesSearch && matchesVehicle && matchesCategory;
+        return matchesFrom && matchesTo && matchesVehicle && matchesCategory;
       }),
-    [rates, search, vehicleFilter, categoryFilter],
+    [rates, fromSearch, toSearch, vehicleFilter, categoryFilter],
   );
 
   const ratesLoadError =
@@ -113,11 +112,21 @@ export default function AllRatesPage() {
 
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
           <Input
-            placeholder="Search by location..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder="From location..."
+            value={fromSearch}
+            onChange={(e) => setFromSearch(e.target.value)}
+            className="pl-9 h-9 text-sm"
+            maxLength={FIELD_LIMITS.search}
+          />
+        </div>
+        <div className="relative flex-1">
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
+          <Input
+            placeholder="To location..."
+            value={toSearch}
+            onChange={(e) => setToSearch(e.target.value)}
             className="pl-9 h-9 text-sm"
             maxLength={FIELD_LIMITS.search}
           />

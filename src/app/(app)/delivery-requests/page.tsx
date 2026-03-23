@@ -163,7 +163,6 @@ export default function DeliveryRequestsPage() {
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Vehicle</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-500">Bids</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-500">Lowest</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
                       <th className="px-4 py-3 w-10"></th>
@@ -185,7 +184,6 @@ export default function DeliveryRequestsPage() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-right text-gray-700">{item.total_bids_count}</td>
-                          <td className="px-4 py-3 text-right text-gray-700">{item.lowest_bid_amount ? formatCurrency(item.lowest_bid_amount) : "—"}</td>
                           <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
                           <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
@@ -209,7 +207,6 @@ export default function DeliveryRequestsPage() {
                         <p className="text-sm text-gray-700">{item.pickup_city} → {item.delivery_city}</p>
                         <div className="flex gap-2 text-xs text-gray-500 mt-1">
                           <span>{item.total_bids_count} bids</span>
-                          {item.lowest_bid_amount && <><span>·</span><span>{formatCurrency(item.lowest_bid_amount)}</span></>}
                         </div>
                       </CardContent>
                     </Card>
@@ -252,7 +249,6 @@ export default function DeliveryRequestsPage() {
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Vehicle</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-500">Bids</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-500">Lowest</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
                       <th className="px-4 py-3 w-10"></th>
@@ -272,7 +268,6 @@ export default function DeliveryRequestsPage() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-right text-gray-700">{item.total_bids_count}</td>
-                          <td className="px-4 py-3 text-right text-gray-700">{item.lowest_bid_amount ? formatCurrency(item.lowest_bid_amount) : "—"}</td>
                           <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
                           <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
@@ -297,7 +292,6 @@ export default function DeliveryRequestsPage() {
                         <div className="flex gap-2 text-xs text-gray-500 mt-1">
                           <span>{item.consigner_name}</span>
                           <span>·</span><span>{item.total_bids_count} bids</span>
-                          {item.lowest_bid_amount && <><span>·</span><span>{formatCurrency(item.lowest_bid_amount)}</span></>}
                         </div>
                       </CardContent>
                     </Card>
