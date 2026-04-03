@@ -80,3 +80,9 @@ export async function removeAdminUser(userId: string): Promise<RemoveAdminUserRe
     method: "DELETE",
   });
 }
+
+export async function permanentlyDeleteAdminUser(userId: string): Promise<RemoveAdminUserResult> {
+  return apiRequest<RemoveAdminUserResult>(`/api/admin/users/${userId}?permanent=true`, {
+    method: "DELETE",
+  });
+}

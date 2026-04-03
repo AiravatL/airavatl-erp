@@ -286,9 +286,17 @@ export async function PATCH(request: Request, context: RouteParams) {
   return NextResponse.json({ ok: true, data: normalizeProfile(row) });
 }
 
-export async function DELETE(_: Request, context: RouteParams) {
+export async function DELETE(request: Request, context: RouteParams) {
   const actorResult = await requireAdminActor();
   if ("error" in actorResult) return actorResult.error;
+
+  // Only super_admin can permanently delete
+  const url = new URL(request.url);
+  const permanent = url.searchParams.get("permanent") === "true";
+
+  if (permanent && actorResult.actor.role !== "super_admin") {
+    return NextResponse.json({ ok: false, message: "Only Super Admin can permanently delete users" }, { status: 403 });
+  }
 
   const { userId } = await context.params;
   if (!userId) {
@@ -296,10 +304,7 @@ export async function DELETE(_: Request, context: RouteParams) {
   }
 
   if (userId === actorResult.actor.id) {
-    return NextResponse.json(
-      { ok: false, message: "You cannot remove your own account" },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, message: "You cannot remove your own account" }, { status: 400 });
   }
 
   const usersResult = await listUsers(actorResult.supabase);
@@ -316,12 +321,40 @@ export async function DELETE(_: Request, context: RouteParams) {
   }
 
   if (existing.role === "super_admin") {
-    return NextResponse.json(
-      { ok: false, message: "Super Admin cannot be removed from this screen" },
-      { status: 403 },
-    );
+    return NextResponse.json({ ok: false, message: "Super Admin cannot be removed" }, { status: 403 });
   }
 
+  if (permanent) {
+    // Permanent delete: deactivate profile + ban auth user.
+    // Profile row stays (preserves FK references in audit_logs, trips, etc.)
+    // Auth user is banned (can never login again) then deleted.
+    const adminClient = getSupabaseAdminClient();
+    if (!adminClient) {
+      return NextResponse.json({ ok: false, message: "Admin client not configured" }, { status: 500 });
+    }
+
+    // Deactivate profile (keep the row for data integrity)
+    const { error: deactError } = await actorResult.supabase.rpc("admin_upsert_profile_v1", {
+      p_user_id: userId,
+      p_full_name: existing.full_name,
+      p_email: existing.email,
+      p_role: existing.role,
+      p_active: false,
+      p_actor_user_id: actorResult.actor.id,
+    } as never);
+
+    if (deactError) {
+      return NextResponse.json({ ok: false, message: deactError.message || "Unable to deactivate" }, { status: 500 });
+    }
+
+    // Ban + delete auth user (profile row stays, all FK data intact)
+    await adminClient.auth.admin.updateUserById(userId, { ban_duration: "876000h" }); // ~100 years
+    await adminClient.auth.admin.deleteUser(userId, false); // false = don't cascade
+
+    return NextResponse.json({ ok: true, data: { id: userId, removed: true, mode: "permanent" } });
+  }
+
+  // Soft-deactivate: set active=false, keep auth user intact for reactivation
   const { error: rpcError } = await actorResult.supabase.rpc("admin_upsert_profile_v1", {
     p_user_id: userId,
     p_full_name: existing.full_name,
@@ -333,25 +366,10 @@ export async function DELETE(_: Request, context: RouteParams) {
 
   if (rpcError) {
     if (isMissingRpcError(rpcError)) {
-      return NextResponse.json({ ok: false, message: "Missing RPC: admin_upsert_profile_v1" }, { status: 500 });
+      return NextResponse.json({ ok: false, message: "Missing RPC" }, { status: 500 });
     }
-    return NextResponse.json(
-      { ok: false, message: rpcError.message || "Unable to remove user" },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, message: rpcError.message || "Unable to deactivate user" }, { status: 500 });
   }
 
-  const adminClient = getSupabaseAdminClient();
-  if (adminClient) {
-    await adminClient.auth.admin.deleteUser(userId, true);
-  }
-
-  return NextResponse.json({
-    ok: true,
-    data: {
-      id: userId,
-      removed: true,
-      mode: "deactivated",
-    },
-  });
+  return NextResponse.json({ ok: true, data: { id: userId, removed: true, mode: "deactivated" } });
 }

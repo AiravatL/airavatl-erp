@@ -9,9 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/shared/page-header";
 import { ROLE_BADGE_COLORS, ROLE_LABELS, ROLE_OPTIONS } from "@/lib/auth/roles";
+import { useAuth } from "@/lib/auth/auth-context";
 import {
   listAdminUsers,
   removeAdminUser,
+  permanentlyDeleteAdminUser,
   type AdminUserRow,
   updateAdminUserStatus,
 } from "@/lib/api/admin-users";
@@ -26,6 +28,8 @@ import {
 
 export default function UsersAdminPage() {
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
+  const isSuperAdmin = currentUser?.role === "super_admin";
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [pendingUserIds, setPendingUserIds] = useState<string[]>([]);
@@ -88,21 +92,12 @@ export default function UsersAdminPage() {
       setActionError(null);
       setActionInfo(null);
       setPending(userId, true);
-      await queryClient.cancelQueries({ queryKey: queryKeys.adminUsers });
-      const previousUsers = queryClient.getQueryData<AdminUserRow[]>(queryKeys.adminUsers) ?? [];
-      queryClient.setQueryData<AdminUserRow[]>(queryKeys.adminUsers, (current = []) =>
-        current.filter((user) => user.id !== userId),
-      );
-      return { previousUsers };
     },
     onSuccess: () => {
-      setActionInfo("User removed (deactivated) successfully.");
+      setActionInfo("User deactivated successfully. You can reactivate from the edit page.");
     },
-    onError: (error, variables, context) => {
-      if (context?.previousUsers) {
-        queryClient.setQueryData(queryKeys.adminUsers, context.previousUsers);
-      }
-      setActionError(error instanceof Error ? error.message : "Unable to remove user");
+    onError: (error, variables) => {
+      setActionError(error instanceof Error ? error.message : "Unable to deactivate user");
       setPending(variables.userId, false);
     },
     onSettled: (_data, _error, variables) => {
@@ -115,12 +110,30 @@ export default function UsersAdminPage() {
     await statusMutation.mutateAsync({ userId, nextActive });
   }
 
+  const permanentDeleteMutation = useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => permanentlyDeleteAdminUser(userId),
+    onMutate: ({ userId }) => { setActionError(null); setActionInfo(null); setPending(userId, true); },
+    onSuccess: () => { setActionInfo("User permanently deleted. Profile data preserved for audit trail."); },
+    onError: (error, variables) => { setActionError(error instanceof Error ? error.message : "Unable to delete"); setPending(variables.userId, false); },
+    onSettled: (_d, _e, variables) => { setPending(variables.userId, false); void queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers }); },
+  });
+
   async function handleRemove(user: AdminUserRow) {
     setActionError(null);
     setActionInfo(null);
-    const confirmed = window.confirm(`Remove ${user.fullName}? This will deactivate the user account.`);
+    const confirmed = window.confirm(`Deactivate ${user.fullName}? They won't be able to login. You can reactivate later.`);
     if (!confirmed) return;
     await removeMutation.mutateAsync({ userId: user.id });
+  }
+
+  async function handlePermanentDelete(user: AdminUserRow) {
+    setActionError(null);
+    setActionInfo(null);
+    const confirmed = window.confirm(
+      `PERMANENTLY DELETE ${user.fullName}?\n\nThis will:\n• Remove login access forever\n• Keep all their data (trips, auctions, audit logs)\n\nThis action CANNOT be undone.`
+    );
+    if (!confirmed) return;
+    await permanentDeleteMutation.mutateAsync({ userId: user.id });
   }
 
   const loadError = usersQuery.error instanceof Error ? usersQuery.error.message : null;
@@ -244,8 +257,21 @@ export default function UsersAdminPage() {
                                     }}
                                   >
                                     <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                    Remove
+                                    Deactivate
                                   </DropdownMenuItem>
+                                  {isSuperAdmin && (
+                                    <DropdownMenuItem
+                                      disabled={isProtectedUser || isPending}
+                                      className="text-red-700 focus:text-red-700 font-medium"
+                                      onSelect={() => {
+                                        if (isProtectedUser) return;
+                                        void handlePermanentDelete(user);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                      Permanently Delete
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
