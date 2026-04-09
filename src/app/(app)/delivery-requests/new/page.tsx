@@ -116,8 +116,10 @@ export default function CreateDeliveryRequestPage() {
     setDeliveryContactName((r.delivery_contact_name as string) ?? "");
     setDeliveryContactPhone((r.delivery_contact_phone as string) ?? "");
 
-    const masterName = (r.vehicle_master_name as string) ?? "";
-    setVehicleType(masterName || ((r.vehicle_type as string) ?? ""));
+    // Prefill vehicle from the source request using its master type id
+    // (the picker is keyed by uuid now, not by name). If the source row
+    // doesn't carry vehicle_master_type_id the user must re-pick.
+    setVehicleMasterTypeId((r.vehicle_master_type_id as string) ?? "");
     if (r.cargo_weight_kg) {
       setCargoWeight(String(Math.round((r.cargo_weight_kg as number) / 1000 * 100) / 100));
       setWeightUnit("ton");

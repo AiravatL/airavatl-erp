@@ -181,7 +181,7 @@ export default function PartnerDetailPage() {
                 {/* Vehicle */}
                 <DocSection title="Vehicle (RC)">
                   <DocRow label="Registration Number" value={vehicle?.registrationNumber} />
-                  <DocRow label="Vehicle Type" value={vehicle?.vehicleType} />
+                  <DocRow label="Vehicle Type" value={vehicle?.vehicleTypeLabel} />
                 </DocSection>
 
                 {/* Driving License */}

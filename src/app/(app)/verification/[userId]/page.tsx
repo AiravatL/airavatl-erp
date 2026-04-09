@@ -209,7 +209,7 @@ export default function VerificationDetailPage() {
   // Validation
   const driverValid = isDriver && (
     currentRegNumber.trim().length > 0 &&
-    currentVehicleType.length > 0 &&
+    currentVehicleMasterTypeId.length > 0 &&
     !!currentRcPhotoKey &&
     currentDlNumber.trim().length > 0 &&
     !!currentDlPhotoKey &&
