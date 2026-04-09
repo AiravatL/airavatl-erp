@@ -5,11 +5,27 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getVerificationDetails } from "@/lib/api/verification";
+import {
+  getVerificationDetails,
+  getTransporterFleet,
+  type TransporterFleetVehicle,
+  type TransporterFleetEmployeeDriver,
+} from "@/lib/api/verification";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDate } from "@/lib/formatters";
 import { useAuth } from "@/lib/auth/auth-context";
-import { ArrowLeft, Phone, MapPin, Calendar, CheckCircle, Clock, ExternalLink } from "lucide-react";
+import {
+  ArrowLeft,
+  Phone,
+  MapPin,
+  Calendar,
+  CheckCircle,
+  Clock,
+  ExternalLink,
+  Truck,
+  Users,
+  AlertTriangle,
+} from "lucide-react";
 
 const TYPE_BADGE: Record<string, string> = {
   individual_driver: "bg-blue-50 text-blue-700",
@@ -40,6 +56,12 @@ export default function PartnerDetailPage() {
   const detail = detailQuery.data;
   const isDriver = detail?.user.userType === "individual_driver";
   const isTransporter = detail?.user.userType === "transporter";
+
+  const fleetQuery = useQuery({
+    queryKey: queryKeys.transporterFleet(userId),
+    queryFn: () => getTransporterFleet(userId),
+    enabled: !!userId && isTransporter,
+  });
   const isVerified = detail?.user.isVerified;
   const canViewVerification = user?.role === "super_admin" || user?.role === "admin";
 
@@ -224,7 +246,153 @@ export default function PartnerDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Transporter fleet: vehicles + employee drivers */}
+      {isTransporter && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Truck className="h-4 w-4 text-gray-500" />
+                <h2 className="text-sm font-semibold text-gray-900">Vehicles</h2>
+                <Badge variant="outline" className="border-0 text-[10px] bg-gray-100 text-gray-600">
+                  {fleetQuery.data?.vehicles.length ?? 0}
+                </Badge>
+              </div>
+              {fleetQuery.isLoading ? (
+                <p className="text-xs text-gray-500">Loading fleet…</p>
+              ) : fleetQuery.data?.vehicles.length === 0 ? (
+                <p className="text-xs text-gray-500">No vehicles added yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(fleetQuery.data?.vehicles ?? []).map((v) => (
+                    <VehicleRow key={v.id} vehicle={v} />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-gray-500" />
+                <h2 className="text-sm font-semibold text-gray-900">Employee Drivers</h2>
+                <Badge variant="outline" className="border-0 text-[10px] bg-gray-100 text-gray-600">
+                  {fleetQuery.data?.employee_drivers.length ?? 0}
+                </Badge>
+              </div>
+              {fleetQuery.isLoading ? (
+                <p className="text-xs text-gray-500">Loading drivers…</p>
+              ) : fleetQuery.data?.employee_drivers.length === 0 ? (
+                <p className="text-xs text-gray-500">No employee drivers added yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(fleetQuery.data?.employee_drivers ?? []).map((d) => (
+                    <EmployeeDriverRow key={d.id} driver={d} />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
+  );
+}
+
+/* --------------------------------- Rows --------------------------------- */
+
+function humanVehicleSpec(v: TransporterFleetVehicle): string {
+  const parts: string[] = [];
+  if (v.capacity_tons != null) {
+    const n = Number(v.capacity_tons);
+    const s = Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/\.?0+$/, "");
+    parts.push(`${s} Ton`);
+  }
+  if (v.length_feet != null) {
+    const n = Number(v.length_feet);
+    parts.push(`${Number.isInteger(n) ? n : n.toFixed(1)} ft`);
+  }
+  if (v.wheel_count != null) parts.push(`${v.wheel_count} Wheel`);
+  return parts.join(" ");
+}
+
+function VehicleRow({ vehicle }: { vehicle: TransporterFleetVehicle }) {
+  const spec = humanVehicleSpec(vehicle);
+  const bodyLabel =
+    vehicle.body_type === "container"
+      ? "Container"
+      : vehicle.body_type === "open"
+        ? "Open Truck"
+        : null;
+  return (
+    <li>
+      <Link
+        href={`/verification/vehicle/${vehicle.id}`}
+        className="flex items-center gap-3 rounded-md border border-gray-200 p-2.5 hover:bg-gray-50"
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
+          <Truck className="h-4 w-4 text-gray-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {vehicle.registration_number}
+          </p>
+          <p className="text-[11px] text-gray-500 truncate">
+            {[spec || null, bodyLabel].filter(Boolean).join(" · ") || "—"}
+          </p>
+        </div>
+        {vehicle.is_verified ? (
+          <Badge variant="outline" className="border-0 text-[10px] bg-emerald-50 text-emerald-700">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Verified
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-0 text-[10px] bg-amber-50 text-amber-700">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Unverified
+          </Badge>
+        )}
+      </Link>
+    </li>
+  );
+}
+
+function EmployeeDriverRow({ driver }: { driver: TransporterFleetEmployeeDriver }) {
+  return (
+    <li>
+      <Link
+        href={`/verification/employee-driver/${driver.id}`}
+        className="flex items-center gap-3 rounded-md border border-gray-200 p-2.5 hover:bg-gray-50"
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
+          <Users className="h-4 w-4 text-gray-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">{driver.full_name}</p>
+          <p className="text-[11px] text-gray-500 truncate">
+            {[
+              driver.phone ? formatPhone(driver.phone) : null,
+              driver.license_number ? `DL ${driver.license_number}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ") || driver.employment_status}
+          </p>
+        </div>
+        {driver.is_documents_verified ? (
+          <Badge variant="outline" className="border-0 text-[10px] bg-emerald-50 text-emerald-700">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Verified
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-0 text-[10px] bg-amber-50 text-amber-700">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Unverified
+          </Badge>
+        )}
+      </Link>
+    </li>
   );
 }
 

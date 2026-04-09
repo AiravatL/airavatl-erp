@@ -33,7 +33,7 @@ export async function PUT(request: Request, context: RouteParams) {
       p_delivery_state: body.deliveryState ?? null,
       p_delivery_contact_name: body.deliveryContactName ?? null,
       p_delivery_contact_phone: body.deliveryContactPhone ?? null,
-      p_vehicle_type: body.vehicleType ?? null,
+      p_vehicle_master_type_id: body.vehicleMasterTypeId ?? null,
       p_cargo_weight_kg: body.cargoWeightKg ?? null,
       p_cargo_description: body.cargoDescription ?? null,
       p_cargo_type: body.cargoType ?? null,

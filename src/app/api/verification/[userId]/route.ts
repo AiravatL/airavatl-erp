@@ -54,7 +54,8 @@ interface VehicleRow {
   id: string;
   registration_number: string;
   registration_certificate_url: string | null;
-  vehicle_type: string;
+  vehicle_master_type_id: string | null;
+  vehicle_type: string | null;
   is_verified: boolean;
 }
 
@@ -127,7 +128,8 @@ function normalizeVehicle(v: VehicleRow | null) {
     id: v.id,
     registrationNumber: v.registration_number,
     registrationCertificateUrl: v.registration_certificate_url,
-    vehicleType: v.vehicle_type,
+    vehicleMasterTypeId: v.vehicle_master_type_id,
+    vehicleTypeLabel: v.vehicle_type,
     isVerified: v.is_verified,
   };
 }

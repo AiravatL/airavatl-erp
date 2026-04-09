@@ -26,7 +26,7 @@ export interface CreateDeliveryRequestInput {
     durationMinutes?: number;
     polyline?: string;
   };
-  vehicleType: string;
+  vehicleMasterTypeId: string;
   cargoWeightKg?: number;
   cargoDescription?: string;
   cargoType?: string;

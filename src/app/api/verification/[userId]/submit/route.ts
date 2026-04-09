@@ -8,7 +8,7 @@ interface SubmitBody {
   licenseExpiryDate?: unknown;
   dlPhotoKey?: unknown;
   registrationNumber?: unknown;
-  vehicleType?: unknown;
+  vehicleMasterTypeId?: unknown;
   rcPhotoKey?: unknown;
   // Transporter fields
   transportLicenseNumber?: unknown;
@@ -60,14 +60,14 @@ export async function POST(
     const aadharNumber = toStr(body.aadharNumber);
     const aadharPhotoKey = toStr(body.aadharPhotoKey);
     const registrationNumber = toStr(body.registrationNumber);
-    const vehicleType = toStr(body.vehicleType);
+    const vehicleMasterTypeId = toStr(body.vehicleMasterTypeId);
     const rcPhotoKey = toStr(body.rcPhotoKey);
     const bankAccountNumber = toStr(body.bankAccountNumber);
     const bankIfscCode = toStr(body.bankIfscCode);
     const bankAccountHolderName = toStr(body.bankAccountHolderName);
 
     if (!licenseNumber || !aadharNumber ||
-        !registrationNumber || !vehicleType ||
+        !registrationNumber || !vehicleMasterTypeId ||
         !bankAccountNumber || !bankIfscCode || !bankAccountHolderName) {
       return NextResponse.json(
         { ok: false, message: "All mandatory driver verification fields are required" },
@@ -86,7 +86,7 @@ export async function POST(
         p_aadhar_number: aadharNumber,
         p_aadhar_photo_key: aadharPhotoKey,
         p_registration_number: registrationNumber,
-        p_vehicle_type: vehicleType,
+        p_vehicle_master_type_id: vehicleMasterTypeId,
         p_rc_photo_key: rcPhotoKey,
         p_bank_account_number: bankAccountNumber,
         p_bank_ifsc_code: bankIfscCode,

@@ -68,7 +68,7 @@ export default function CreateDeliveryRequestPage() {
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState("");
 
-  const [vehicleType, setVehicleType] = useState("");
+  const [vehicleMasterTypeId, setVehicleMasterTypeId] = useState("");
   const [cargoWeight, setCargoWeight] = useState("");
   const [weightUnit, setWeightUnit] = useState<WeightUnit>("ton");
   const [cargoDescription, setCargoDescription] = useState("");
@@ -197,7 +197,7 @@ export default function CreateDeliveryRequestPage() {
   const isValid =
     pickup !== null &&
     delivery !== null &&
-    vehicleType !== "" &&
+    vehicleMasterTypeId !== "" &&
     consignmentDate !== "" &&
     consignmentDate >= today;
 
@@ -230,7 +230,7 @@ export default function CreateDeliveryRequestPage() {
             deliveryState: delivery!.state,
             deliveryContactName: deliveryContactName.trim() || undefined,
             deliveryContactPhone: deliveryContactPhone.trim() || undefined,
-            vehicleType,
+            vehicleMasterTypeId,
             cargoWeightKg,
             cargoDescription: cargoDescription.trim() || undefined,
             cargoType: cargoType || undefined,
@@ -271,7 +271,7 @@ export default function CreateDeliveryRequestPage() {
         route: route
           ? { distanceKm: route.distanceKm, durationMinutes: route.durationMinutes ?? undefined, polyline: route.polyline ?? undefined }
           : undefined,
-        vehicleType,
+        vehicleMasterTypeId,
         cargoWeightKg,
         cargoDescription: cargoDescription.trim() || undefined,
         cargoType: cargoType || undefined,
@@ -426,7 +426,7 @@ export default function CreateDeliveryRequestPage() {
                   <Label className="text-sm font-medium">
                     Vehicle Type <span className="text-red-500">*</span>
                   </Label>
-                  <VehicleTypePicker value={vehicleType} onChange={setVehicleType} />
+                  <VehicleTypePicker value={vehicleMasterTypeId} onChange={setVehicleMasterTypeId} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Cargo Weight</Label>

@@ -18,7 +18,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getVerificationDetails, submitVerification, revokeVerification } from "@/lib/api/verification";
+import {
+  getVerificationDetails,
+  submitVerification,
+  revokeVerification,
+  getTransporterFleet,
+  type TransporterFleetVehicle,
+  type TransporterFleetEmployeeDriver,
+} from "@/lib/api/verification";
 import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDate } from "@/lib/formatters";
@@ -26,7 +33,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { DocumentUpload } from "@/app/(app)/verification/document-upload";
 import {
   ArrowLeft, Phone, MapPin, Calendar, ShieldCheck, ShieldOff,
-  Loader2, AlertTriangle, CheckCircle,
+  Loader2, AlertTriangle, CheckCircle, Truck, Users,
 } from "lucide-react";
 
 const TYPE_BADGE: Record<string, string> = {
@@ -58,7 +65,7 @@ export default function VerificationDetailPage() {
 
   // Form state — Driver
   const [regNumber, setRegNumber] = useState<string>();
-  const [vehicleType, setVehicleType] = useState<string>();
+  const [vehicleMasterTypeId, setVehicleMasterTypeId] = useState<string>();
   const [rcPhotoKey, setRcPhotoKey] = useState<string | null>();
   const [dlNumber, setDlNumber] = useState<string>();
   const [dlExpiry, setDlExpiry] = useState<string>();
@@ -90,9 +97,17 @@ export default function VerificationDetailPage() {
     enabled: !!userId,
   });
 
+  const isTransporterQuery = detailQuery.data?.user.userType === "transporter";
+
+  const fleetQuery = useQuery({
+    queryKey: queryKeys.transporterFleet(userId),
+    queryFn: () => getTransporterFleet(userId),
+    enabled: !!userId && isTransporterQuery,
+  });
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.verificationDetail(userId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.transporterFleet(userId) });
     queryClient.invalidateQueries({ queryKey: ["verification", "pending"] });
   };
 
@@ -109,7 +124,7 @@ export default function VerificationDetailPage() {
           aadharNumber: currentAadhaarNumber.trim(),
           aadharPhotoKey: currentAadhaarPhotoKey ?? undefined,
           registrationNumber: currentRegNumber.trim(),
-          vehicleType: currentVehicleType,
+          vehicleMasterTypeId: currentVehicleMasterTypeId,
           rcPhotoKey: currentRcPhotoKey ?? undefined,
           bankAccountNumber: currentBankAccount.trim(),
           bankIfscCode: currentBankIfsc.trim().toUpperCase(),
@@ -155,7 +170,8 @@ export default function VerificationDetailPage() {
   const isVerified = detail?.user.isVerified;
   const canRevoke = (user?.role === "super_admin" || user?.role === "admin") && isVerified;
   const currentRegNumber = regNumber ?? detail?.vehicle?.registrationNumber ?? "";
-  const currentVehicleType = vehicleType ?? detail?.vehicle?.vehicleType ?? "";
+  const currentVehicleMasterTypeId =
+    vehicleMasterTypeId ?? detail?.vehicle?.vehicleMasterTypeId ?? "";
   const currentRcPhotoKey =
     rcPhotoKey ?? detail?.uploads.rc?.objectKey ?? detail?.vehicle?.registrationCertificateUrl ?? null;
   const currentDlNumber = dlNumber ?? detail?.driver?.licenseNumber ?? "";
@@ -371,8 +387,8 @@ export default function VerificationDetailPage() {
                         Vehicle Type <span className="text-red-500">*</span>
                       </Label>
                       <VehicleTypePicker
-                        value={currentVehicleType}
-                        onChange={setVehicleType}
+                        value={currentVehicleMasterTypeId}
+                        onChange={setVehicleMasterTypeId}
                         disabled={!!isVerified}
                       />
                     </div>
@@ -661,6 +677,65 @@ export default function VerificationDetailPage() {
         </Card>
       </div>
 
+      {/* Transporter fleet: vehicles + employee drivers */}
+      {isTransporter && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Truck className="h-4 w-4 text-gray-500" />
+                <h2 className="text-sm font-semibold text-gray-900">Vehicles</h2>
+                <Badge variant="outline" className="border-0 text-[10px] bg-gray-100 text-gray-600">
+                  {fleetQuery.data?.vehicles.length ?? 0}
+                </Badge>
+              </div>
+              {fleetQuery.isLoading ? (
+                <p className="text-xs text-gray-500">Loading fleet…</p>
+              ) : fleetQuery.isError ? (
+                <p className="text-xs text-red-600">
+                  {fleetQuery.error instanceof Error ? fleetQuery.error.message : "Failed to load fleet"}
+                </p>
+              ) : fleetQuery.data?.vehicles.length === 0 ? (
+                <p className="text-xs text-gray-500">No vehicles added yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(fleetQuery.data?.vehicles ?? []).map((v) => (
+                    <FleetVehicleRow key={v.id} vehicle={v} />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-gray-500" />
+                <h2 className="text-sm font-semibold text-gray-900">Employee Drivers</h2>
+                <Badge variant="outline" className="border-0 text-[10px] bg-gray-100 text-gray-600">
+                  {fleetQuery.data?.employee_drivers.length ?? 0}
+                </Badge>
+              </div>
+              {fleetQuery.isLoading ? (
+                <p className="text-xs text-gray-500">Loading drivers…</p>
+              ) : fleetQuery.isError ? (
+                <p className="text-xs text-red-600">
+                  {fleetQuery.error instanceof Error ? fleetQuery.error.message : "Failed to load drivers"}
+                </p>
+              ) : fleetQuery.data?.employee_drivers.length === 0 ? (
+                <p className="text-xs text-gray-500">No employee drivers added yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(fleetQuery.data?.employee_drivers ?? []).map((d) => (
+                    <FleetEmployeeDriverRow key={d.id} driver={d} />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Revoke Dialog */}
       <Dialog open={showRevoke} onOpenChange={(open) => { if (!open) { setShowRevoke(false); setRevokeReason(""); } }}>
         <DialogContent className="sm:max-w-md">
@@ -720,5 +795,96 @@ function Clock({ className }: { className?: string }) {
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
     </svg>
+  );
+}
+
+function humanVehicleSpec(v: TransporterFleetVehicle): string {
+  const parts: string[] = [];
+  if (v.capacity_tons != null) {
+    const n = Number(v.capacity_tons);
+    const s = Number.isInteger(n) ? n.toString() : n.toFixed(2).replace(/\.?0+$/, "");
+    parts.push(`${s} Ton`);
+  }
+  if (v.length_feet != null) {
+    const n = Number(v.length_feet);
+    parts.push(`${Number.isInteger(n) ? n : n.toFixed(1)} ft`);
+  }
+  if (v.wheel_count != null) parts.push(`${v.wheel_count} Wheel`);
+  return parts.join(" ");
+}
+
+function FleetVehicleRow({ vehicle }: { vehicle: TransporterFleetVehicle }) {
+  const spec = humanVehicleSpec(vehicle);
+  const bodyLabel =
+    vehicle.body_type === "container"
+      ? "Container"
+      : vehicle.body_type === "open"
+        ? "Open Truck"
+        : null;
+  return (
+    <li>
+      <Link
+        href={`/verification/vehicle/${vehicle.id}`}
+        className="flex items-center gap-3 rounded-md border border-gray-200 p-2.5 hover:bg-gray-50"
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
+          <Truck className="h-4 w-4 text-gray-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {vehicle.registration_number}
+          </p>
+          <p className="text-[11px] text-gray-500 truncate">
+            {[spec || null, bodyLabel].filter(Boolean).join(" · ") || "—"}
+          </p>
+        </div>
+        {vehicle.is_verified ? (
+          <Badge variant="outline" className="border-0 text-[10px] bg-emerald-50 text-emerald-700">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Verified
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-0 text-[10px] bg-amber-50 text-amber-700">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Unverified
+          </Badge>
+        )}
+      </Link>
+    </li>
+  );
+}
+
+function FleetEmployeeDriverRow({ driver }: { driver: TransporterFleetEmployeeDriver }) {
+  const phoneLabel = driver.phone ? formatPhone(driver.phone) : null;
+  return (
+    <li>
+      <Link
+        href={`/verification/employee-driver/${driver.id}`}
+        className="flex items-center gap-3 rounded-md border border-gray-200 p-2.5 hover:bg-gray-50"
+      >
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
+          <Users className="h-4 w-4 text-gray-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">{driver.full_name}</p>
+          <p className="text-[11px] text-gray-500 truncate">
+            {[phoneLabel, driver.license_number ? `DL ${driver.license_number}` : null]
+              .filter(Boolean)
+              .join(" · ") || driver.employment_status}
+          </p>
+        </div>
+        {driver.is_documents_verified ? (
+          <Badge variant="outline" className="border-0 text-[10px] bg-emerald-50 text-emerald-700">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Verified
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-0 text-[10px] bg-amber-50 text-amber-700">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Unverified
+          </Badge>
+        )}
+      </Link>
+    </li>
   );
 }

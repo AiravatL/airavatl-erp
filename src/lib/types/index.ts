@@ -426,6 +426,23 @@ export interface VerificationUploadSummary {
   source: VerificationUploadSource;
 }
 
+export type PendingVerificationKind =
+  | "individual_driver"
+  | "transporter"
+  | "employee_driver"
+  | "vehicle";
+
+export interface PendingVerificationItem {
+  kind: PendingVerificationKind;
+  id: string;
+  title: string;
+  subtitle: string | null;
+  parentTitle: string | null;
+  city: string | null;
+  createdAt: string;
+}
+
+/** @deprecated use PendingVerificationItem. Kept for legacy imports. */
 export interface PendingPartner {
   userId: string;
   fullName: string;
@@ -486,7 +503,8 @@ export interface VerificationDetails {
     id: string;
     registrationNumber: string;
     registrationCertificateUrl: string | null;
-    vehicleType: string;
+    vehicleMasterTypeId: string | null;
+    vehicleTypeLabel: string | null;
     isVerified: boolean;
   } | null;
   uploads: Partial<Record<VerificationUploadDocType, VerificationUploadSummary | null>>;
@@ -499,7 +517,7 @@ export interface SubmitDriverVerificationInput {
   aadharNumber: string;
   aadharPhotoKey?: string;
   registrationNumber: string;
-  vehicleType: string;
+  vehicleMasterTypeId: string;
   rcPhotoKey?: string;
   bankAccountNumber: string;
   bankIfscCode: string;

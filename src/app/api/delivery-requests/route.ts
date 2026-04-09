@@ -78,7 +78,7 @@ interface CreateBody {
     durationMinutes?: number;
     polyline?: string;
   };
-  vehicleType?: string;
+  vehicleMasterTypeId?: string;
   cargoWeightKg?: number;
   cargoDescription?: string;
   cargoType?: string;
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (!body.vehicleType) {
+  if (!body.vehicleMasterTypeId) {
     return NextResponse.json({ ok: false, message: "Vehicle type is required" }, { status: 400 });
   }
   if (!body.consignmentDate) {
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     p_estimated_duration_minutes: routeData.durationMinutes ?? null,
     p_route_polyline: routeData.polyline ?? null,
     // Cargo
-    p_vehicle_type: body.vehicleType,
+    p_vehicle_master_type_id: body.vehicleMasterTypeId ?? null,
     p_cargo_weight_kg: body.cargoWeightKg ?? null,
     p_cargo_description: body.cargoDescription ?? null,
     p_cargo_type: body.cargoType ?? "general",

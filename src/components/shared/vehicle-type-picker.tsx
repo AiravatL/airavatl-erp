@@ -17,8 +17,9 @@ import { queryKeys } from "@/lib/query/keys";
 import { cn } from "@/lib/utils";
 
 interface VehicleTypePickerProps {
+  /** Selected vehicle master type id (uuid). */
   value: string;
-  onChange: (value: string) => void;
+  onChange: (id: string) => void;
   disabled?: boolean;
   placeholder?: string;
   className?: string;
@@ -50,8 +51,13 @@ export function VehicleTypePicker({
   const openVehicles = filtered.filter((v) => !v.name.toLowerCase().includes("container"));
   const containerVehicles = filtered.filter((v) => v.name.toLowerCase().includes("container"));
 
-  const handleSelect = (name: string) => {
-    onChange(name);
+  const selectedLabel = useMemo(
+    () => vehicles.find((v) => v.id === value)?.name ?? "",
+    [vehicles, value],
+  );
+
+  const handleSelect = (id: string) => {
+    onChange(id);
     setOpen(false);
     setSearch("");
   };
@@ -69,7 +75,7 @@ export function VehicleTypePicker({
           className,
         )}
       >
-        <span className="truncate">{value || placeholder}</span>
+        <span className="truncate">{selectedLabel || placeholder}</span>
         <Truck className="ml-2 h-3.5 w-3.5 shrink-0 text-gray-400" />
       </Button>
 
@@ -102,7 +108,7 @@ export function VehicleTypePicker({
                     label="Open Truck"
                     badgeClass="bg-blue-50 text-blue-700"
                     vehicles={openVehicles}
-                    selected={value}
+                    selectedId={value}
                     onSelect={handleSelect}
                   />
                 )}
@@ -111,7 +117,7 @@ export function VehicleTypePicker({
                     label="Container"
                     badgeClass="bg-purple-50 text-purple-700"
                     vehicles={containerVehicles}
-                    selected={value}
+                    selectedId={value}
                     onSelect={handleSelect}
                   />
                 )}
@@ -142,14 +148,14 @@ function VehicleGroup({
   label,
   badgeClass,
   vehicles,
-  selected,
+  selectedId,
   onSelect,
 }: {
   label: string;
   badgeClass: string;
   vehicles: { id: string; name: string }[];
-  selected: string;
-  onSelect: (name: string) => void;
+  selectedId: string;
+  onSelect: (id: string) => void;
 }) {
   return (
     <div>
@@ -159,12 +165,12 @@ function VehicleGroup({
       </div>
       <div className="grid grid-cols-2 gap-1">
         {vehicles.map((v) => {
-          const isSelected = v.name === selected;
+          const isSelected = v.id === selectedId;
           return (
             <button
               key={v.id}
               type="button"
-              onClick={() => onSelect(v.name)}
+              onClick={() => onSelect(v.id)}
               className={cn(
                 "flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors",
                 isSelected

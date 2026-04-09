@@ -45,6 +45,9 @@ export const queryKeys = {
   verificationPending: (filters: { userType?: string; search?: string; limit?: number; offset?: number }) =>
     ["verification", "pending", filters] as const,
   verificationDetail: (userId: string) => ["verification", "detail", userId] as const,
+  transporterFleet: (userId: string) => ["verification", "transporter-fleet", userId] as const,
+  vehicleVerification: (vehicleId: string) => ["verification", "vehicle", vehicleId] as const,
+  employeeDriverVerification: (driverId: string) => ["verification", "employee-driver", driverId] as const,
   deliveryRequests: (filters: {
     search?: string;
     status?: string;
