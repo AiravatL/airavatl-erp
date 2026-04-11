@@ -129,7 +129,7 @@ export function TripMap({
     <div
       ref={containerRef}
       className={className}
-      style={{ height: 260, width: "100%", borderRadius: 12, overflow: "hidden" }}
+      style={{ position: "relative", zIndex: 0, height: 260, width: "100%", borderRadius: 12, overflow: "hidden" }}
     />
   );
 }
