@@ -35,14 +35,20 @@ export async function GET(
 
   const { tripId } = await params;
 
-  const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc("trip_payment_requests_list_v1", {
-    p_actor_user_id: actorResult.actor.id,
-    p_trip_id: tripId,
-  } as never);
+  const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc(
+    "trip_payment_requests_list_v1",
+    {
+      p_actor_user_id: actorResult.actor.id,
+      p_trip_id: tripId,
+    } as never,
+  );
 
   if (rpcError) {
     if (isMissingRpcError(rpcError)) {
-      return NextResponse.json({ ok: false, message: "Missing RPC: trip_payment_requests_list_v1" }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, message: "Missing RPC: trip_payment_requests_list_v1" },
+        { status: 500 },
+      );
     }
     return mapRpcError(rpcError.message ?? "Unable to fetch payment requests", rpcError.code);
   }

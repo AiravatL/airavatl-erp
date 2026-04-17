@@ -17,6 +17,8 @@ export interface AppUser {
   documentsVerified: boolean | null;
   vehicleNumber: string | null;
   vehicleType: string | null;
+  vehicleCount: number | null;
+  driverCount: number | null;
 }
 
 export interface AppUserListResponse {

@@ -20,11 +20,56 @@ let _loginInProgress = false;
 let _initialSessionChecked = false;
 let _profileInFlight: Promise<User | null> | null = null;
 let _profileCache: { value: User | null; at: number } | null = null;
-const PROFILE_CACHE_TTL_MS = 30_000;
+// 5 min TTL: profile data (name, role, active) rarely changes within a
+// browsing session; longer TTL keeps nav snappy and halves /api/auth/me
+// chatter without hurting freshness in any meaningful way.
+const PROFILE_CACHE_TTL_MS = 5 * 60_000;
+const PROFILE_STORAGE_KEY = "erp:auth:profile";
+
+function readStoredProfile(): { value: User | null; at: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { value: User | null; at: number };
+    if (!parsed || typeof parsed.at !== "number") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredProfile(entry: { value: User | null; at: number }) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(entry));
+  } catch {
+    // quota / privacy mode — ignore
+  }
+}
+
+function clearStoredProfile() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(PROFILE_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+// Seed from sessionStorage so hard refreshes within the same tab skip
+// the /api/auth/me round-trip entirely when the entry is still fresh.
+if (typeof window !== "undefined") {
+  const stored = readStoredProfile();
+  if (stored && Date.now() - stored.at < PROFILE_CACHE_TTL_MS) {
+    _profileCache = stored;
+  }
+}
 
 function clearProfileCache() {
   _profileInFlight = null;
   _profileCache = null;
+  clearStoredProfile();
 }
 
 function isProfileCacheFresh() {
@@ -46,10 +91,16 @@ async function fetchProfile(options?: { force?: boolean }): Promise<User | null>
   _profileInFlight = (async () => {
     try {
       const user = await getCurrentUserProfile();
-      _profileCache = { value: user, at: Date.now() };
+      const entry = { value: user, at: Date.now() };
+      _profileCache = entry;
+      writeStoredProfile(entry);
       return user;
     } catch {
-      _profileCache = { value: null, at: Date.now() };
+      // Treat as null, but keep the stored profile if we have one — the
+      // /api/auth/me endpoint might have transient failures and we'd
+      // rather reuse the stored profile than force the user to sign in.
+      const entry = { value: null, at: Date.now() };
+      _profileCache = entry;
       return null;
     } finally {
       _profileInFlight = null;
@@ -59,6 +110,11 @@ async function fetchProfile(options?: { force?: boolean }): Promise<User | null>
   return _profileInFlight;
 }
 
+// NOTE: Zustand initial state must match on server and client to avoid
+// a Next.js hydration mismatch. The sessionStorage seed above only warms
+// `_profileCache` so the first async `fetchProfile()` call (inside
+// initSession's useEffect) resolves instantly from storage — but the
+// first synchronous render still shows the loading state on both sides.
 export const useAuthStore = create<AuthState>()((set) => ({
   user: null,
   isAuthenticated: false,

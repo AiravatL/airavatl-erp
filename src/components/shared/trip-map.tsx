@@ -129,7 +129,16 @@ export function TripMap({
     <div
       ref={containerRef}
       className={className}
-      style={{ position: "relative", zIndex: 0, height: 260, width: "100%", borderRadius: 12, overflow: "hidden" }}
+      style={{
+        position: "relative",
+        zIndex: 0,
+        width: "100%",
+        // Default height when no caller className overrides; h-full from
+        // parent flexbox lets the map stretch to fill available space.
+        minHeight: 260,
+        borderRadius: 12,
+        overflow: "hidden",
+      }}
     />
   );
 }

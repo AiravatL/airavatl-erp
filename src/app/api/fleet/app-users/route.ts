@@ -21,6 +21,8 @@ interface RpcItem {
   documents_verified: boolean | null;
   vehicle_number: string | null;
   vehicle_type: string | null;
+  vehicle_count: number | null;
+  driver_count: number | null;
 }
 
 interface RpcResult {
@@ -93,6 +95,8 @@ export async function GET(request: Request) {
         documentsVerified: row.documents_verified,
         vehicleNumber: row.vehicle_number ?? null,
         vehicleType: row.vehicle_type ?? null,
+        vehicleCount: row.vehicle_count ?? null,
+        driverCount: row.driver_count ?? null,
       })),
     },
   });

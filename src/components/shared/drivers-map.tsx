@@ -207,15 +207,21 @@ export function DriversMap({ drivers, className, selectedDriverId, onSelectDrive
   }, [drivers, onSelectDriver, selectedDriverId]);
 
   useEffect(() => {
-    if (!selectedDriverId || !mapRef.current) return;
+    if (!selectedDriverId || !mapRef.current || !clusterRef.current) return;
     const marker = markersRef.current.get(selectedDriverId);
     if (!marker) return;
-    const latLng = marker.getLatLng();
-    mapRef.current.setView(latLng, Math.max(mapRef.current.getZoom(), 13), {
-      animate: true,
-    });
-    marker.openTooltip();
-    marker.openPopup();
+
+    const openCard = () => {
+      marker.openTooltip();
+      marker.openPopup();
+    };
+
+    // If the marker is hidden inside a cluster, openPopup() silently no-ops
+    // because the individual marker isn't on the DOM — the composite cluster
+    // marker is. zoomToShowLayer zooms in (or spiderfies) until this marker
+    // is visible, then fires the callback. Works identically for markers
+    // that are already visible (callback fires immediately).
+    clusterRef.current.zoomToShowLayer(marker, openCard);
   }, [selectedDriverId]);
 
   return (

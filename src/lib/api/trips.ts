@@ -251,9 +251,20 @@ export interface AuctionTripListResponse {
   items: AuctionTripListItem[];
 }
 
+export interface AssignedDriverInfo {
+  id: string;
+  type: "employee_driver";
+  name: string;
+  phone: string | null;
+  license_number: string | null;
+  employment_status: string | null;
+  is_documents_verified: boolean;
+}
+
 export interface AuctionTripDetail {
   trip: Record<string, unknown>;
   bid: Record<string, unknown>;
+  assigned_driver: AssignedDriverInfo | null;
   erp_metadata: {
     consigner_trip_amount: number;
     selected_by_admin_id: string;

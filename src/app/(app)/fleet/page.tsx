@@ -50,12 +50,6 @@ const driverColumns = [
     header: "Phone",
     cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
   }),
-  driverCol.accessor("city", {
-    header: "City",
-    cell: (info) => (
-      <span className="text-gray-600">{info.getValue() ?? "—"}</span>
-    ),
-  }),
   driverCol.accessor("vehicleNumber", {
     header: "Vehicle",
     cell: (info) => {
@@ -97,10 +91,16 @@ const transporterColumns = [
     header: "Phone",
     cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
   }),
-  transporterCol.accessor("city", {
-    header: "City",
+  transporterCol.accessor("vehicleCount", {
+    header: "Vehicles",
     cell: (info) => (
-      <span className="text-gray-600">{info.getValue() ?? "—"}</span>
+      <span className="text-gray-600">{info.getValue() ?? 0}</span>
+    ),
+  }),
+  transporterCol.accessor("driverCount", {
+    header: "Drivers",
+    cell: (info) => (
+      <span className="text-gray-600">{info.getValue() ?? 0}</span>
     ),
   }),
   transporterCol.accessor("documentsVerified", {

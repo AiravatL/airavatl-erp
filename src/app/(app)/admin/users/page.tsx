@@ -12,7 +12,6 @@ import { ROLE_BADGE_COLORS, ROLE_LABELS, ROLE_OPTIONS } from "@/lib/auth/roles";
 import { useAuth } from "@/lib/auth/auth-context";
 import {
   listAdminUsers,
-  removeAdminUser,
   permanentlyDeleteAdminUser,
   type AdminUserRow,
   updateAdminUserStatus,
@@ -86,26 +85,6 @@ export default function UsersAdminPage() {
     },
   });
 
-  const removeMutation = useMutation({
-    mutationFn: async ({ userId }: { userId: string }) => removeAdminUser(userId),
-    onMutate: async ({ userId }) => {
-      setActionError(null);
-      setActionInfo(null);
-      setPending(userId, true);
-    },
-    onSuccess: () => {
-      setActionInfo("User deactivated successfully. You can reactivate from the edit page.");
-    },
-    onError: (error, variables) => {
-      setActionError(error instanceof Error ? error.message : "Unable to deactivate user");
-      setPending(variables.userId, false);
-    },
-    onSettled: (_data, _error, variables) => {
-      setPending(variables.userId, false);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers });
-    },
-  });
-
   async function handleStatusToggle(userId: string, nextActive: boolean) {
     await statusMutation.mutateAsync({ userId, nextActive });
   }
@@ -121,9 +100,17 @@ export default function UsersAdminPage() {
   async function handleRemove(user: AdminUserRow) {
     setActionError(null);
     setActionInfo(null);
-    const confirmed = window.confirm(`Deactivate ${user.fullName}? They won't be able to login. You can reactivate later.`);
+    if (!user.active) {
+      // Already inactive — no-op rather than calling the RPC again
+      return;
+    }
+    const confirmed = window.confirm(
+      `Deactivate ${user.fullName}? They won't be able to login. You can reactivate later.`,
+    );
     if (!confirmed) return;
-    await removeMutation.mutateAsync({ userId: user.id });
+    // Route through the same mutation as the Switch so the toggle, badge,
+    // and dropdown text all stay in sync via optimistic update.
+    await statusMutation.mutateAsync({ userId: user.id, nextActive: false });
   }
 
   async function handlePermanentDelete(user: AdminUserRow) {
@@ -248,17 +235,19 @@ export default function UsersAdminPage() {
                                       </Link>
                                     </DropdownMenuItem>
                                   )}
-                                  <DropdownMenuItem
-                                    disabled={isProtectedUser || isPending}
-                                    className="text-red-600 focus:text-red-600"
-                                    onSelect={() => {
-                                      if (isProtectedUser) return;
-                                      void handleRemove(user);
-                                    }}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                    Deactivate
-                                  </DropdownMenuItem>
+                                  {user.active && (
+                                    <DropdownMenuItem
+                                      disabled={isProtectedUser || isPending}
+                                      className="text-red-600 focus:text-red-600"
+                                      onSelect={() => {
+                                        if (isProtectedUser) return;
+                                        void handleRemove(user);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                      Deactivate
+                                    </DropdownMenuItem>
+                                  )}
                                   {isSuperAdmin && (
                                     <DropdownMenuItem
                                       disabled={isProtectedUser || isPending}
