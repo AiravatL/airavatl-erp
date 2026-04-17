@@ -29,17 +29,23 @@ AiravatL ERP is a logistics operations system built with **Next.js 16 (App Route
 - `src/components/layout/` — AppShell, Sidebar
 - `src/components/shared/` — PageHeader, StatusBadge, EmptyState
 - `src/lib/types/` — Domain TypeScript types
-- `src/lib/auth/` — Auth context (currently mock, will be Supabase Auth)
-- `src/lib/mock-data/` — Mock data for all entities (development phase)
-- `src/modules/` — Domain logic (services, actions) — scaffolded but empty, to be filled as backend connects
+- `src/lib/auth/` — Supabase Auth + Zustand `auth-store.ts` (session + role claims)
+- `src/lib/api/` — Client-side RPC fetchers (one file per domain: trips, auctions, payments, …)
+- `src/lib/query/` — TanStack Query keys and hooks
 
 ### Key Domain Concepts
 
-**6 Roles:** `founder_admin`, `sales`, `ops`, `field`, `accounts`, `support`. Permissions are centralized in a role→resource→action map in `lib/permissions/`. The sidebar and dashboard adapt based on role.
+**7 Roles:** `super_admin`, `admin`, `sales_consigner`, `operations`, `sales_vehicles`, `accounts`, `support`.
+- **operations** owns auctions + trips (create, manage, select winner); doesn't see financial amounts
+- **sales_consigner** is restricted to Consigner CRM + Customer pages
+- Role gating happens in API routes via `requireServerActor(allowedRoles)` from `@/lib/auth/server-actor` and in the sidebar via the `roles` field on each nav item
 
-**Trip Lifecycle (13 stages):** Request Received → Quoted → Confirmed → Vehicle Assigned → At Loading → Loaded (Docs OK) → Advance Paid → In Transit → Delivered → POD Soft Received → Vendor Settled → Customer Collected → Closed. Each stage transition has gate rules (required docs, payment proofs, approvals).
+**Two Trip Systems (share the same URL routes):**
+- **Legacy trips** — 13-stage lifecycle (request_received → closed), RPCs `trip_list_active_v2`, `trip_get_v2`. Shrinking but not yet deleted.
+- **Auction trips** — new auction-flow (waiting_driver_acceptance → delivery_completed), RPCs `erp.trip_list_v1`, `erp.trip_detail_v1`. This is the path new trips take.
+- Both share `erp/src/app/api/trips/_shared.ts` which exports `mapRpcError` (legacy) and `mapTripRpcError` (new).
 
-**Leased trips** have extra tabs: Expenses (with caps and approval) and Checkpoints (3 mandatory odometer readings with photos).
+**App-shell layout** — `components/layout/app-shell.tsx` provides a full-width topbar above the sidebar. Page titles/descriptions are pushed to the topbar via `PageHeaderProvider` + `useRegisterPageHeader`; the `<PageHeader>` component itself now only renders action buttons inline, and the title text shows in the topbar left chunk (aligned with main content).
 
 ### Coding Conventions (from docs/CODING_STANDARDS.md)
 - Files/folders: `kebab-case`. Components/types: `PascalCase`. DB columns: `snake_case`.

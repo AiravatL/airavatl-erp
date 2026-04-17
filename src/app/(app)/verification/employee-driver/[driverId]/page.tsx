@@ -54,9 +54,9 @@ export default function EmployeeDriverVerificationPage() {
 
   const d = detailQuery.data;
   const currentDlPhotoKey =
-    dlPhotoKey ?? d?.uploads?.dl?.objectKey ?? d?.license_photo_url ?? null;
+    dlPhotoKey ?? d?.uploads?.dl?.objectKey ?? d?.licensePhotoUrl ?? null;
   const currentAadhaarPhotoKey =
-    aadhaarPhotoKey ?? d?.uploads?.aadhaar?.objectKey ?? d?.aadhar_photo_url ?? null;
+    aadhaarPhotoKey ?? d?.uploads?.aadhaar?.objectKey ?? d?.aadharPhotoUrl ?? null;
   const canVerify =
     licenseNumber.trim().length > 0 &&
     AADHAAR_RE.test(aadharNumber.trim()) &&
@@ -65,34 +65,35 @@ export default function EmployeeDriverVerificationPage() {
 
   useEffect(() => {
     if (!d) return;
-    setLicenseNumber(d.license_number ?? "");
-    setLicenseExpiry(d.license_expiry_date ?? "");
-    setAadharNumber(d.aadhar_number ?? "");
-    setEmployeeId(d.employee_id ?? "");
+    setLicenseNumber(d.licenseNumber ?? "");
+    setLicenseExpiry(d.licenseExpiryDate ?? "");
+    setAadharNumber(d.aadharNumber ?? "");
+    setEmployeeId(d.employeeId ?? "");
   }, [d?.id]);
 
-  const saveMutation = useMutation({
-    mutationFn: () =>
-      updateEmployeeDriver(driverId, {
+  const verifyMutation = useMutation({
+    mutationFn: async () => {
+      // Persist typed form values first so the RPC sees them.
+      // update_employee_driver_v1 uses COALESCE internally, so blank fields
+      // don't clobber existing data.
+      await updateEmployeeDriver(driverId, {
         licenseNumber: licenseNumber.trim() || undefined,
         licenseExpiryDate: licenseExpiry || undefined,
         aadharNumber: aadharNumber.trim() || undefined,
         employeeId: employeeId.trim() || undefined,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.employeeDriverVerification(driverId) });
+      });
+      return verifyEmployeeDriver(driverId, {
+        verificationNotes: notes.trim() || undefined,
+      });
     },
-  });
-
-  const verifyMutation = useMutation({
-    mutationFn: () =>
-      verifyEmployeeDriver(driverId, { verificationNotes: notes.trim() || undefined }),
     onSuccess: () => {
       setNotes("");
       queryClient.invalidateQueries({ queryKey: queryKeys.employeeDriverVerification(driverId) });
-      if (d?.transporter?.user_id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.transporterFleet(d.transporter.user_id) });
+      queryClient.invalidateQueries({ queryKey: ["verification", "pending"] });
+      if (d?.transporter?.userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.transporterFleet(d.transporter.userId) });
       }
+      router.push("/verification");
     },
   });
 
@@ -102,13 +103,13 @@ export default function EmployeeDriverVerificationPage() {
     onSuccess: () => {
       setNotes("");
       queryClient.invalidateQueries({ queryKey: queryKeys.employeeDriverVerification(driverId) });
-      if (d?.transporter?.user_id) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.transporterFleet(d.transporter.user_id) });
+      if (d?.transporter?.userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.transporterFleet(d.transporter.userId) });
       }
     },
   });
 
-  const canRevoke = (user?.role === "super_admin" || user?.role === "admin") && d?.is_documents_verified;
+  const canRevoke = (user?.role === "super_admin" || user?.role === "admin") && d?.isDocumentsVerified;
 
   if (detailQuery.isLoading) {
     return (
@@ -140,7 +141,7 @@ export default function EmployeeDriverVerificationPage() {
           Back
         </button>
         <Link
-          href={`/vendors/user/${d.transporter.user_id}`}
+          href={`/fleet/user/${d.transporter.userId}`}
           className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
         >
           View transporter <ExternalLink className="h-3 w-3" />
@@ -150,8 +151,8 @@ export default function EmployeeDriverVerificationPage() {
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Users className="h-5 w-5 text-gray-500" />
-          <h1 className="text-xl font-semibold text-gray-900">{d.full_name}</h1>
-          {d.is_documents_verified ? (
+          <h1 className="text-xl font-semibold text-gray-900">{d.fullName}</h1>
+          {d.isDocumentsVerified ? (
             <Badge variant="outline" className="border-0 text-xs bg-emerald-50 text-emerald-700">
               <CheckCircle className="h-3 w-3 mr-1" />
               Verified
@@ -164,7 +165,7 @@ export default function EmployeeDriverVerificationPage() {
           )}
         </div>
         <p className="text-sm text-gray-500">
-          Employee of {d.transporter.organization_name ?? d.transporter.full_name}
+          Employee of {d.transporter.organizationName ?? d.transporter.fullName}
           {d.phone ? ` · ${d.phone}` : ""}
         </p>
       </div>
@@ -173,15 +174,15 @@ export default function EmployeeDriverVerificationPage() {
         <CardContent className="p-4 space-y-4">
           <h2 className="text-sm font-semibold text-gray-900">Employment</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <Row label="Employment status" value={d.employment_status} />
+            <Row label="Employment status" value={d.employmentStatus} />
             <Row
               label="Start date"
-              value={d.employment_start_date ? formatDate(d.employment_start_date) : null}
+              value={d.employmentStartDate ? formatDate(d.employmentStartDate) : null}
             />
-            <Row label="Trips completed" value={String(d.total_trips_completed)} />
+            <Row label="Trips completed" value={String(d.totalTripsCompleted)} />
             <Row
               label="Average rating"
-              value={d.average_rating != null ? Number(d.average_rating).toFixed(1) : null}
+              value={d.averageRating != null ? Number(d.averageRating).toFixed(1) : null}
             />
           </div>
 
@@ -234,63 +235,44 @@ export default function EmployeeDriverVerificationPage() {
           <DocumentUpload
             label="Driving License Photo"
             docType="dl"
-            userId={d.user_id}
+            userId={d.userId}
             required
             objectKey={currentDlPhotoKey}
             uploadSummary={d.uploads?.dl}
-            disabled={d.is_documents_verified}
+            disabled={d.isDocumentsVerified}
             onUploaded={setDlPhotoKey}
           />
 
           <DocumentUpload
             label="Aadhaar Photo"
             docType="aadhaar"
-            userId={d.user_id}
+            userId={d.userId}
             required
             objectKey={currentAadhaarPhotoKey}
             uploadSummary={d.uploads?.aadhaar}
-            disabled={d.is_documents_verified}
+            disabled={d.isDocumentsVerified}
             onUploaded={setAadhaarPhotoKey}
           />
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-            >
-              {saveMutation.isPending ? "Saving…" : "Save details"}
-            </Button>
-            {saveMutation.isError && (
-              <p className="text-xs text-red-600 self-center">
-                {(saveMutation.error as Error).message}
-              </p>
-            )}
-            {saveMutation.isSuccess && (
-              <p className="text-xs text-emerald-600 self-center">Saved</p>
-            )}
-          </div>
-
-          {d.verification_notes && (
+          {d.verificationNotes && (
             <>
               <h3 className="text-sm font-semibold text-gray-900 pt-2 border-t border-gray-100">
                 Verification notes
               </h3>
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">{d.verification_notes}</p>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{d.verificationNotes}</p>
             </>
           )}
 
           <div className="pt-2 border-t border-gray-100 space-y-2">
             <Label htmlFor="driver-notes" className="text-xs">
-              {d.is_documents_verified ? "Revocation reason" : "Verification notes"} (optional)
+              {d.isDocumentsVerified ? "Revocation reason" : "Verification notes"} (optional)
             </Label>
             <Textarea
               id="driver-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={
-                d.is_documents_verified
+                d.isDocumentsVerified
                   ? "Reason for revoking verification…"
                   : "Any notes about this driver…"
               }
@@ -298,7 +280,7 @@ export default function EmployeeDriverVerificationPage() {
               disabled={verifyMutation.isPending || revokeMutation.isPending}
             />
             <div className="flex gap-2">
-              {!d.is_documents_verified && (
+              {!d.isDocumentsVerified && (
                 <Button
                   onClick={() => verifyMutation.mutate()}
                   disabled={verifyMutation.isPending || !canVerify}
@@ -325,7 +307,7 @@ export default function EmployeeDriverVerificationPage() {
                   (revokeMutation.error as Error)?.message}
               </p>
             )}
-            {!canVerify && !d.is_documents_verified && (
+            {!canVerify && !d.isDocumentsVerified && (
               <p className="text-[11px] text-amber-600">
                 Driving license, Aadhaar number, and both document uploads are required before verifying.
               </p>

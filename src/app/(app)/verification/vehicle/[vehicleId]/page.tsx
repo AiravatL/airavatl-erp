@@ -52,9 +52,11 @@ export default function VehicleVerificationPage() {
     onSuccess: () => {
       setNotes("");
       queryClient.invalidateQueries({ queryKey: queryKeys.vehicleVerification(vehicleId) });
+      queryClient.invalidateQueries({ queryKey: ["verification", "pending"] });
       if (v?.owner?.user_id) {
         queryClient.invalidateQueries({ queryKey: queryKeys.transporterFleet(v.owner.user_id) });
       }
+      router.push("/verification");
     },
   });
 
@@ -111,7 +113,7 @@ export default function VehicleVerificationPage() {
         </button>
         {v.owner?.user_id && (
           <Link
-            href={`/vendors/user/${v.owner.user_id}`}
+            href={`/fleet/user/${v.owner.user_id}`}
             className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
           >
             View owner <ExternalLink className="h-3 w-3" />

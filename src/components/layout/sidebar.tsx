@@ -35,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Auctions", href: "/delivery-requests", icon: PackagePlus, roles: ["super_admin", "admin", "operations"] },
   { label: "Trips", href: "/trips", icon: Truck, roles: ["super_admin", "admin", "operations"] },
-  { label: "Fleet", href: "/vendors", icon: Building2, roles: ["super_admin", "admin", "operations", "sales_vehicles"] },
+  { label: "Fleet", href: "/fleet", icon: Building2, roles: ["super_admin", "admin", "operations", "sales_vehicles"] },
   { label: "Live Map", href: "/fleet/live-map", icon: MapPin, roles: ["super_admin", "admin", "operations"] },
   { label: "Payments", href: "/payments", icon: CreditCard, roles: ["super_admin", "admin", "accounts"] },
   { label: "Receivables", href: "/receivables", icon: Receipt, roles: ["super_admin", "admin", "accounts"] },

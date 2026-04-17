@@ -77,7 +77,7 @@ export default function PartnerDetailPage() {
     return (
       <div className="p-4 sm:p-6 space-y-2">
         <p className="text-sm text-gray-500">Partner not found.</p>
-        <Link href="/vendors" className="text-sm text-blue-600 hover:underline">
+        <Link href="/fleet" className="text-sm text-blue-600 hover:underline">
           Back to Fleet
         </Link>
       </div>
@@ -93,7 +93,7 @@ export default function PartnerDetailPage() {
       {/* Back nav */}
       <div className="flex items-center justify-between">
         <Link
-          href="/vendors"
+          href="/fleet"
           className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -329,7 +329,7 @@ function VehicleRow({ vehicle }: { vehicle: TransporterFleetVehicle }) {
   return (
     <li>
       <Link
-        href={`/verification/vehicle/${vehicle.id}`}
+        href={`/fleet/vehicle/${vehicle.id}`}
         className="flex items-center gap-3 rounded-md border border-gray-200 p-2.5 hover:bg-gray-50"
       >
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
@@ -363,7 +363,7 @@ function EmployeeDriverRow({ driver }: { driver: TransporterFleetEmployeeDriver 
   return (
     <li>
       <Link
-        href={`/verification/employee-driver/${driver.id}`}
+        href={`/fleet/employee-driver/${driver.id}`}
         className="flex items-center gap-3 rounded-md border border-gray-200 p-2.5 hover:bg-gray-50"
       >
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">

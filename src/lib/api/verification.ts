@@ -260,33 +260,33 @@ export async function revokeVehicle(
 
 export interface EmployeeDriverVerificationDetail {
   id: string;
-  user_id: string;
-  employee_id: string | null;
-  full_name: string;
+  userId: string;
+  employeeId: string | null;
+  fullName: string;
   phone: string | null;
-  license_number: string | null;
-  license_expiry_date: string | null;
-  license_photo_url: string | null;
-  aadhar_number: string | null;
-  aadhar_photo_url: string | null;
-  emergency_contact_name: string | null;
-  emergency_contact_phone: string | null;
-  employment_start_date: string | null;
-  employment_status: string;
-  total_trips_completed: number;
-  average_rating: number | null;
-  is_documents_verified: boolean;
-  verified_at: string | null;
-  verification_notes: string | null;
+  licenseNumber: string | null;
+  licenseExpiryDate: string | null;
+  licensePhotoUrl: string | null;
+  aadharNumber: string | null;
+  aadharPhotoUrl: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  employmentStartDate: string | null;
+  employmentStatus: string | null;
+  totalTripsCompleted: number;
+  averageRating: number | null;
+  isDocumentsVerified: boolean;
+  verifiedAt: string | null;
+  verificationNotes: string | null;
   uploads?: {
     dl?: VerificationUploadSummary | null;
     aadhaar?: VerificationUploadSummary | null;
   };
   transporter: {
     id: string;
-    user_id: string;
-    full_name: string;
-    organization_name: string | null;
+    userId: string;
+    fullName: string;
+    organizationName: string | null;
     phone: string | null;
   };
 }

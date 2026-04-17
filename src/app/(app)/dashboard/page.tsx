@@ -256,7 +256,7 @@ function getQuickActions(role: Role) {
       return [];
     case "sales_vehicles":
       return [
-        { label: "Fleet", href: "/vendors", icon: Users },
+        { label: "Fleet", href: "/fleet", icon: Users },
         { label: "Verification", href: "/verification", icon: Truck },
         { label: "Rate Library", href: "/rates", icon: Receipt },
       ];
