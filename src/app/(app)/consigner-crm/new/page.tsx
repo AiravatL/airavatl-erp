@@ -24,8 +24,11 @@ import {
   sanitizeSingleLineInput,
 } from "@/lib/validation/client/sanitizers";
 import { isValidEmail, sanitizeDecimalInput, sanitizePhoneInput } from "@/lib/validation/client/validators";
-import { Save, X, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Save, X, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { format, parseISO } from "date-fns";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -375,12 +378,49 @@ export default function AddLeadPage() {
             {/* Next Follow-up */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FieldWrapper label="Next Follow-up Date">
-                <Input
-                  type="date"
-                  value={form.nextFollowUp}
-                  onChange={(e) => updateField("nextFollowUp", e.target.value)}
-                  className="h-9 text-sm"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "w-full h-9 justify-start font-normal text-sm px-3",
+                        !form.nextFollowUp && "text-gray-500",
+                      )}
+                    >
+                      <CalendarIcon className="h-4 w-4 mr-2 text-gray-500" />
+                      {form.nextFollowUp
+                        ? format(parseISO(form.nextFollowUp), "EEE, dd MMM yyyy")
+                        : "Pick a date"}
+                      {form.nextFollowUp && (
+                        <span
+                          role="button"
+                          tabIndex={-1}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateField("nextFollowUp", "");
+                          }}
+                          className="ml-auto rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-auto" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={form.nextFollowUp ? parseISO(form.nextFollowUp) : undefined}
+                      onSelect={(d) => {
+                        if (d) updateField("nextFollowUp", format(d, "yyyy-MM-dd"));
+                      }}
+                      captionLayout="dropdown"
+                      fromYear={new Date().getFullYear() - 1}
+                      toYear={new Date().getFullYear() + 1}
+                    />
+                  </PopoverContent>
+                </Popover>
               </FieldWrapper>
             </div>
 

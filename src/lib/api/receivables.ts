@@ -7,6 +7,8 @@ export interface ConsignerReceivableGroup {
   total_invoiced: number;
   total_received: number;
   total_outstanding: number;
+  /** Aggregate holding charges across this consigner's receivables. */
+  total_holding: number;
   overdue_count: number;
   overdue_amount: number | null;
   receivables: {
@@ -15,6 +17,8 @@ export interface ConsignerReceivableGroup {
     invoice_amount: number;
     amount_received: number;
     amount_outstanding: number;
+    /** Portion of invoice_amount that came from holding charges. */
+    holding_amount: number;
     status: string;
     due_date: string;
     days_overdue: number;

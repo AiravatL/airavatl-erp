@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { PageHeader } from "@/components/shared/page-header";
@@ -42,8 +42,40 @@ import { KpiCard } from "@/components/reports/kpi-card";
 import { CollectionProofUpload, hasReceivableCollectionProof } from "./_components/collection-proof-upload";
 import {
   Loader2, Search, Receipt, IndianRupee, CheckCircle,
-  ChevronDown, ChevronUp, Banknote, Building2,
+  ChevronDown, ChevronUp, Banknote, Building2, Download,
+  ArrowDownWideNarrow,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type AgingBucket = "all" | "current" | "1-30" | "31-60" | "61-90" | "90+";
+type SortKey = "outstanding_desc" | "outstanding_asc" | "most_overdue" | "oldest_due" | "newest_due";
+
+const AGING_CHIPS: { value: AgingBucket; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "current", label: "Current" },
+  { value: "1-30", label: "1–30d" },
+  { value: "31-60", label: "31–60d" },
+  { value: "61-90", label: "61–90d" },
+  { value: "90+", label: "90+d" },
+];
+
+function matchesAging(daysOverdue: number, bucket: AgingBucket) {
+  switch (bucket) {
+    case "all": return true;
+    case "current": return daysOverdue <= 0;
+    case "1-30": return daysOverdue >= 1 && daysOverdue <= 30;
+    case "31-60": return daysOverdue >= 31 && daysOverdue <= 60;
+    case "61-90": return daysOverdue >= 61 && daysOverdue <= 90;
+    case "90+": return daysOverdue > 90;
+  }
+}
+
+function csvEscape(value: string | number | null | undefined): string {
+  if (value == null) return "";
+  const s = String(value);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700",
@@ -60,6 +92,8 @@ export default function ReceivablesPage() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [agingFilter, setAgingFilter] = useState<AgingBucket>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("outstanding_desc");
 
   // Collect dialog (per-trip)
   const [collectReceivableId, setCollectReceivableId] = useState<string | null>(null);
@@ -146,6 +180,114 @@ export default function ReceivablesPage() {
   const consigners = listQuery.data ?? [];
   const summary = summaryQuery.data;
 
+  // Apply the aging filter client-side and recompute group totals from
+  // the filtered subset, then sort by the chosen key. Doing this client
+  // side keeps the single list RPC unchanged; volumes are small enough
+  // (groups of trips per consigner) that it's not a perf concern.
+  const processedConsigners = useMemo(() => {
+    const filtered = agingFilter === "all"
+      ? consigners
+      : consigners
+          .map((cg) => {
+            const matching = cg.receivables.filter((r) => matchesAging(r.days_overdue, agingFilter));
+            if (matching.length === 0) return null;
+            const total_outstanding = matching.reduce((s, r) => s + r.amount_outstanding, 0);
+            const total_received = matching.reduce((s, r) => s + r.amount_received, 0);
+            const total_invoiced = matching.reduce((s, r) => s + r.invoice_amount, 0);
+            const total_holding = matching.reduce((s, r) => s + (r.holding_amount ?? 0), 0);
+            const overdue = matching.filter(
+              (r) => (r.status === "pending" || r.status === "partial") && r.days_overdue > 0,
+            );
+            return {
+              ...cg,
+              receivables: matching,
+              trip_count: matching.length,
+              total_outstanding,
+              total_received,
+              total_invoiced,
+              total_holding,
+              overdue_count: overdue.length,
+              overdue_amount: overdue.reduce((s, r) => s + r.amount_outstanding, 0),
+            } as ConsignerReceivableGroup;
+          })
+          .filter((cg): cg is ConsignerReceivableGroup => cg !== null);
+
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      switch (sortKey) {
+        case "outstanding_desc":
+          return b.total_outstanding - a.total_outstanding;
+        case "outstanding_asc":
+          return a.total_outstanding - b.total_outstanding;
+        case "most_overdue": {
+          const aMax = Math.max(0, ...a.receivables.map((r) => r.days_overdue));
+          const bMax = Math.max(0, ...b.receivables.map((r) => r.days_overdue));
+          return bMax - aMax;
+        }
+        case "oldest_due": {
+          const aMin = a.receivables.reduce(
+            (min, r) => (r.due_date < min ? r.due_date : min),
+            a.receivables[0]?.due_date ?? "",
+          );
+          const bMin = b.receivables.reduce(
+            (min, r) => (r.due_date < min ? r.due_date : min),
+            b.receivables[0]?.due_date ?? "",
+          );
+          return aMin.localeCompare(bMin);
+        }
+        case "newest_due": {
+          const aMax = a.receivables.reduce(
+            (max, r) => (r.due_date > max ? r.due_date : max),
+            a.receivables[0]?.due_date ?? "",
+          );
+          const bMax = b.receivables.reduce(
+            (max, r) => (r.due_date > max ? r.due_date : max),
+            b.receivables[0]?.due_date ?? "",
+          );
+          return bMax.localeCompare(aMax);
+        }
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [consigners, agingFilter, sortKey]);
+
+  function exportCsv() {
+    const header = [
+      "Consigner", "Trip Number", "Pickup", "Delivery",
+      "Invoice Amount", "Holding Amount", "Amount Received", "Amount Outstanding",
+      "Status", "Due Date", "Days Overdue",
+    ];
+    const rows: string[] = [header.map(csvEscape).join(",")];
+    for (const cg of processedConsigners) {
+      for (const r of cg.receivables) {
+        rows.push([
+          cg.consigner_name,
+          r.trip_number,
+          r.pickup_city,
+          r.delivery_city,
+          r.invoice_amount,
+          r.holding_amount ?? 0,
+          r.amount_received,
+          r.amount_outstanding,
+          r.status,
+          r.due_date,
+          r.days_overdue,
+        ].map(csvEscape).join(","));
+      }
+    }
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `receivables-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   function openCollect(receivable: ConsignerReceivableGroup["receivables"][0], consignerName: string) {
     setCollectReceivableId(receivable.id);
     setCollectInfo({ tripNumber: receivable.trip_number, consignerName, invoiceAmount: receivable.invoice_amount, amountReceived: receivable.amount_received, amountOutstanding: receivable.amount_outstanding });
@@ -203,7 +345,7 @@ export default function ReceivablesPage() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters — search + status + sort + export */}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -220,74 +362,180 @@ export default function ReceivablesPage() {
             <SelectItem value="collected">Collected</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+          <SelectTrigger className="h-8 w-[180px] text-xs gap-1">
+            <ArrowDownWideNarrow className="h-3.5 w-3.5 text-gray-500" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="outstanding_desc">Most outstanding</SelectItem>
+            <SelectItem value="outstanding_asc">Least outstanding</SelectItem>
+            <SelectItem value="most_overdue">Most overdue</SelectItem>
+            <SelectItem value="oldest_due">Oldest due date</SelectItem>
+            <SelectItem value="newest_due">Newest due date</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 text-xs gap-1.5 ml-auto"
+          onClick={exportCsv}
+          disabled={processedConsigners.length === 0}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
+        </Button>
+      </div>
+
+      {/* Aging bucket chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {AGING_CHIPS.map((chip) => {
+          const active = agingFilter === chip.value;
+          return (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => setAgingFilter(chip.value)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                active
+                  ? "border-gray-900 bg-gray-900 text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+              )}
+            >
+              {chip.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Loading / Empty */}
       {listQuery.isLoading && (
         <Card><CardContent className="flex items-center gap-2 p-4 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading...</CardContent></Card>
       )}
-      {!listQuery.isLoading && consigners.length === 0 && (
-        <EmptyState icon={Receipt} title="No receivables" description="Receivables appear when ERP trips complete." />
+      {!listQuery.isLoading && processedConsigners.length === 0 && (
+        <EmptyState
+          icon={Receipt}
+          title={consigners.length === 0 ? "No receivables" : "Nothing matches"}
+          description={
+            consigners.length === 0
+              ? "Receivables appear when ERP trips complete."
+              : "No receivables match this filter — try switching to All."
+          }
+        />
       )}
 
-      {/* Consigner Cards */}
-      {consigners.map((cg) => {
+      {/* Consigner Cards — 2 columns on lg+ so the card's horizontal space
+          is actually used (was 80% dead whitespace). Expanded card goes
+          full-width so the trip list has room to breathe. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+      {processedConsigners.map((cg) => {
         const isExpanded = expandedConsigner === cg.consigner_profile_id;
         const hasOverdue = (cg.overdue_count ?? 0) > 0;
         const pendingRecv = cg.receivables.filter((r) => r.status === "pending" || r.status === "partial");
+        const maxOverdue = cg.receivables.reduce(
+          (m, r) => (r.days_overdue > m ? r.days_overdue : m),
+          0,
+        );
 
         return (
-          <Card key={cg.consigner_profile_id} className={hasOverdue ? "border-red-200" : ""}>
-            <CardContent className="p-4">
-              {/* Consigner header */}
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
+          <Card
+            key={cg.consigner_profile_id}
+            className={cn(hasOverdue && "border-red-200")}
+          >
+            <CardContent className="p-3 space-y-2">
+              {/* Row 1: name + amount */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
-                    <span className="text-sm font-semibold text-gray-900">{cg.consigner_name}</span>
-                    <span className="text-[10px] text-gray-400">{cg.trip_count} trip{cg.trip_count !== 1 ? "s" : ""}</span>
+                    <span className="text-sm font-semibold text-gray-900 truncate">
+                      {cg.consigner_name}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {cg.trip_count} trip{cg.trip_count !== 1 ? "s" : ""}
+                    </span>
                     {hasOverdue && (
-                      <Badge variant="outline" className="border-0 text-[10px] bg-red-100 text-red-700">{cg.overdue_count} overdue</Badge>
+                      <Badge variant="outline" className="border-0 text-[10px] bg-red-100 text-red-700">
+                        {cg.overdue_count} overdue
+                      </Badge>
                     )}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-lg font-bold text-gray-900">{formatCurrency(cg.total_outstanding)}</p>
-                  <p className="text-[10px] text-gray-400">of {formatCurrency(cg.total_invoiced)} invoiced</p>
+                  <p className="text-base font-bold text-gray-900 leading-tight">
+                    {formatCurrency(cg.total_outstanding)}
+                  </p>
+                  <p className="text-[10px] text-gray-400">
+                    of {formatCurrency(cg.total_invoiced)}
+                  </p>
                 </div>
               </div>
 
-              {/* Progress bar */}
+              {/* Row 2: progress bar (collection %) */}
               {cg.total_invoiced > 0 && (
-                <div className="h-1.5 w-full rounded-full bg-gray-100 mb-3">
-                  <div className="h-1.5 rounded-full bg-emerald-500 transition-all"
-                    style={{ width: `${Math.min((cg.total_received / cg.total_invoiced) * 100, 100)}%` }} />
+                <div className="h-1.5 w-full rounded-full bg-gray-100">
+                  <div
+                    className="h-1.5 rounded-full bg-emerald-500 transition-all"
+                    style={{
+                      width: `${Math.min((cg.total_received / cg.total_invoiced) * 100, 100)}%`,
+                    }}
+                  />
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+              {/* Row 3: inline stats grid + actions */}
+              <div className="flex items-end justify-between gap-2">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] min-w-0">
                   {cg.total_received > 0 && (
-                    <span className="text-emerald-600">Received: {formatCurrency(cg.total_received)}</span>
+                    <span className="text-emerald-600 whitespace-nowrap">
+                      <span className="text-gray-400 font-normal">Received </span>
+                      {formatCurrency(cg.total_received)}
+                    </span>
+                  )}
+                  {maxOverdue > 0 && (
+                    <span className="text-red-600 whitespace-nowrap">
+                      <span className="text-gray-400 font-normal">Max overdue </span>
+                      {maxOverdue}d
+                    </span>
+                  )}
+                  {cg.total_holding > 0 && (
+                    <span className="text-amber-700 whitespace-nowrap">
+                      <span className="text-gray-400 font-normal">Holding </span>
+                      {formatCurrency(cg.total_holding)}
+                    </span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1 shrink-0">
                   {isAccounts && cg.total_outstanding > 0 && (
-                    <Button size="sm" className="h-7 text-[11px] gap-1" onClick={() => openBulk(cg)}>
-                      <Banknote className="h-3 w-3" /> Record Payment
+                    <Button
+                      size="sm"
+                      className="h-7 text-[11px] gap-1"
+                      onClick={() => openBulk(cg)}
+                    >
+                      <Banknote className="h-3 w-3" /> Record
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                    onClick={() => setExpandedConsigner(isExpanded ? null : cg.consigner_profile_id)}>
-                    {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() =>
+                      setExpandedConsigner(isExpanded ? null : cg.consigner_profile_id)
+                    }
+                  >
+                    {isExpanded ? (
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </div>
               </div>
 
               {/* Expanded: individual receivables */}
               {isExpanded && (
-                <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                <div className="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
                   {cg.receivables.map((r) => {
                     const isOverdue = r.days_overdue > 0 && r.status !== "collected" && r.status !== "written_off";
                     const statusColor = STATUS_COLORS[r.status] ?? "bg-gray-100 text-gray-700";
@@ -302,6 +550,11 @@ export default function ReceivablesPage() {
                             {isOverdue && <span className="text-[10px] text-red-600 font-medium">{r.days_overdue}d overdue</span>}
                           </div>
                           <p className="text-[10px] text-gray-400">{r.pickup_city} → {r.delivery_city} · Due: {formatDate(r.due_date)}</p>
+                          {r.holding_amount > 0 && (
+                            <p className="text-[10px] text-amber-700">
+                              incl. {formatCurrency(r.holding_amount)} holding
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <div className="text-right">
@@ -327,6 +580,7 @@ export default function ReceivablesPage() {
           </Card>
         );
       })}
+      </div>
 
       {/* Per-Trip Collect Dialog */}
       {collectReceivableId && collectInfo && (

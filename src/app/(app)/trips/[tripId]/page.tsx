@@ -36,6 +36,7 @@ import {
 import { TripTimeline } from "./_components/trip-timeline";
 import { SignedImagePreview } from "@/components/shared/signed-image-preview";
 import { AdminDeleteDialog } from "@/components/shared/admin-delete-dialog";
+import { HoldingChargesCard } from "./holding-charges-card";
 import dynamic from "next/dynamic";
 
 const TripMap = dynamic(() => import("@/components/shared/trip-map").then((m) => ({ default: m.TripMap })), { ssr: false });
@@ -458,6 +459,15 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                 </Button>
               </CardContent>
             </Card>
+          )}
+
+          {/* Holding Charges — driver waits / extra fees recorded by Ops */}
+          {isErp && (
+            <HoldingChargesCard
+              tripId={tripId}
+              canEdit={isOps || isAdmin}
+              readOnly={isTerminal || finalAlreadyRequested}
+            />
           )}
 
           {/* Already-requested info — replaces the CTA once a request exists */}

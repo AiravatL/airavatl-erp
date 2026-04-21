@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CreditCard, MapPin, PackagePlus, Truck, Users } from "lucide-react";
+import { BarChart3, CreditCard, Users, LineChart as LineChartIcon } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { DateRangeFilterBar, createDefaultDateRange, type DateRangeFilters } from "@/components/reports/filter-bar";
 import { KpiCard } from "@/components/reports/kpi-card";
@@ -22,10 +22,8 @@ const TRIPS_CONFIG = { value: { label: "Count", color: "#3b82f6" } } satisfies C
 const PAYMENTS_CONFIG = { value: { label: "Amount", color: "#111827" } } satisfies ChartConfig;
 
 const MODULE_CARDS = [
-  { label: "Auctions", href: "/reports/auctions", icon: PackagePlus, description: "Delivery request and bidding analytics" },
-  { label: "Trips", href: "/reports/trips", icon: Truck, description: "App trip data and status tracking" },
+  { label: "Analytics", href: "/reports/analytics", icon: LineChartIcon, description: "Auction + trip funnel and trends" },
   { label: "Financial", href: "/reports/financial", icon: CreditCard, description: "Payments and driver payouts" },
-  { label: "Drivers", href: "/reports/drivers", icon: MapPin, description: "Driver locations and availability" },
   { label: "Customers", href: "/reports/customers", icon: Users, description: "Consigner analytics and credit health" },
 ];
 

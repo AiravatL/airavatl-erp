@@ -48,10 +48,9 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const REPORT_SUB_ITEMS = [
-  { label: "Auctions", href: "/reports/auctions" },
-  { label: "Trips", href: "/reports/trips" },
+  { label: "Overview", href: "/reports" },
+  { label: "Analytics", href: "/reports/analytics" },
   { label: "Financial", href: "/reports/financial" },
-  { label: "Drivers", href: "/reports/drivers" },
   { label: "Customers", href: "/reports/customers" },
 ] as const;
 
@@ -125,8 +124,13 @@ export function Sidebar({
                 {isReportsMenuOpen && !collapsed ? (
                   <div className="mt-1 space-y-0.5 pl-9">
                     {REPORT_SUB_ITEMS.map((subItem) => {
+                      // "Overview" points at the parent /reports path itself,
+                      // so it must match exactly — otherwise every deeper
+                      // report would also light up "Overview".
                       const isSubActive =
-                        pathname === subItem.href || pathname.startsWith(subItem.href + "/");
+                        subItem.href === "/reports"
+                          ? pathname === "/reports"
+                          : pathname === subItem.href || pathname.startsWith(subItem.href + "/");
                       return (
                         <Link
                           key={subItem.href}

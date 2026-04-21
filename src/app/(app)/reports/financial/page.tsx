@@ -21,6 +21,9 @@ interface FinancialData {
     total_revenue: number; avg_revenue_per_trip: number; margin_pct: number;
     erp_revenue: number; app_revenue: number; erp_billed: number; app_billed: number;
     erp_trips: number; app_trips: number;
+    total_holding_driver: number;
+    total_holding_consigner: number;
+    total_holding_margin: number;
   };
   receivables: { total_outstanding: number; total_overdue: number; collected_in_period: number };
   driver_payments: { erp_paid: number; erp_pending: number; app_paid: number; app_pending: number };
@@ -117,6 +120,27 @@ function OverviewTab({ data }: { data: FinancialData }) {
         <KpiCard label="Outstanding Receivables" value={formatCurrency(r.total_outstanding)} helper={r.total_overdue > 0 ? `${formatCurrency(r.total_overdue)} overdue` : "None overdue"} />
         <KpiCard label="Collected (Period)" value={formatCurrency(r.collected_in_period)} />
       </div>
+
+      {/* Holding Charges KPIs — shown only when any holding was recorded. */}
+      {(s.total_holding_consigner > 0 || s.total_holding_driver > 0) && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <KpiCard
+            label="Holding — Billed to Consigners"
+            value={formatCurrency(s.total_holding_consigner)}
+            helper="included in total billed"
+          />
+          <KpiCard
+            label="Holding — Paid to Drivers"
+            value={formatCurrency(s.total_holding_driver)}
+            helper="included in driver cost"
+          />
+          <KpiCard
+            label="Holding — Margin"
+            value={formatCurrency(s.total_holding_margin)}
+            helper={s.total_holding_margin >= 0 ? "contribution to revenue" : "negative contribution"}
+          />
+        </div>
+      )}
 
       {/* Revenue Trend */}
       <div className="grid gap-4 lg:grid-cols-3">

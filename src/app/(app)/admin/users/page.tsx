@@ -128,6 +128,13 @@ export default function UsersAdminPage() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="User Management" description={`${users.length} users`}>
+        {isSuperAdmin && (
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" asChild>
+            <Link href="/admin/users/deleted">
+              <Trash2 className="h-3.5 w-3.5" /> Deleted Users
+            </Link>
+          </Button>
+        )}
         <Button size="sm" className="h-8 text-xs gap-1.5" asChild>
           <Link href="/admin/users/new">
             <Plus className="h-3.5 w-3.5" /> Add User

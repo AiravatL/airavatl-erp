@@ -1,5 +1,6 @@
 export const queryKeys = {
   adminUsers: ["admin-users"] as const,
+  adminUsersDeleted: ["admin-users", "deleted"] as const,
   adminUser: (userId: string) => ["admin-user", userId] as const,
   adminVehicleMaster: (includeInactive?: boolean) => ["admin-vehicle-master", { includeInactive }] as const,
   vehicleMasterOptions: ["vehicle-master-options"] as const,
@@ -79,6 +80,9 @@ export const queryKeys = {
   tripLoadingProofs: (tripId: string) => ["trips", "loading-proofs", tripId] as const,
   tripTimeline: (tripId: string) => ["trips", "timeline", tripId] as const,
   tripDriverLocation: (tripId: string) => ["trips", "driver-location", tripId] as const,
+  tripHoldingCharges: (tripId: string) => ["trips", "holding-charges", tripId] as const,
+  reportsAnalytics: (filters: { from?: string; to?: string }) =>
+    ["reports", "analytics", filters] as const,
   paymentsQueue: (filters: { search?: string; status?: string; type?: string }) => ["payments", "queue", filters] as const,
   paymentProofUpload: (paymentRequestId: string) => ["payments", "proof-upload", paymentRequestId] as const,
   receivableCollectionProof: (receivableId: string) => ["receivables", "proof-upload", "single", receivableId] as const,

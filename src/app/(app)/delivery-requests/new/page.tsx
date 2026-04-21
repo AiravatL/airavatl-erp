@@ -10,7 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
+import { format, parseISO, startOfDay } from "date-fns";
 import {
   createDeliveryRequest,
   getDeliveryRequest,
@@ -26,7 +37,23 @@ import {
 } from "@/lib/types";
 import type { CargoType } from "@/lib/types";
 import { LocationPicker } from "./location-picker";
-import { Save, X, Loader2, MapPin, Search, Check } from "lucide-react";
+import { Save, X, Loader2, MapPin, Search, Check, CalendarIcon, Clock, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// Common pickup-time presets. Ops can still type a custom time in the
+// fallback input below; most requests land on one of these slots.
+const PICKUP_TIME_PRESETS = [
+  "06:00", "07:00", "08:00", "09:00", "10:00", "11:00",
+  "12:00", "13:00", "14:00", "15:00", "16:00", "17:00",
+  "18:00", "19:00", "20:00",
+];
+
+function formatPresetTime(hm: string) {
+  const [h, m] = hm.split(":").map((n) => parseInt(n, 10));
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${m.toString().padStart(2, "0")} ${period}`;
+}
 
 type WeightUnit = "ton" | "kg";
 
@@ -142,10 +169,9 @@ export default function CreateDeliveryRequestPage() {
     setEditLoaded(true);
   }, [prefillId, editQuery.data, editLoaded, isRepeatMode]);
 
-  // Consigner search
+  // Consigner search — Popover handles open/close + outside-click.
   const [debouncedConsignerSearch, setDebouncedConsignerSearch] = useState("");
   const consignerDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const consignerContainerRef = useRef<HTMLDivElement>(null);
 
   const handleConsignerSearchChange = useCallback((value: string) => {
     setConsignerSearch(value);
@@ -162,16 +188,6 @@ export default function CreateDeliveryRequestPage() {
   });
 
   const consigners = consignersQuery.data?.items ?? [];
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (consignerContainerRef.current && !consignerContainerRef.current.contains(e.target as Node)) {
-        setShowConsignerDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   // Auto-calculate route
   useEffect(() => {
@@ -320,56 +336,99 @@ export default function CreateDeliveryRequestPage() {
             {/* Section 1: Consigner */}
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Consigner</h3>
-              <div ref={consignerContainerRef} className="space-y-1.5">
+              <div className="space-y-1.5">
                 <Label className="text-sm font-medium">
                   Select Consigner <span className="text-xs text-gray-400">(optional)</span>
                 </Label>
-                {selectedConsigner ? (
-                  <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                    <Check className="h-4 w-4 text-green-600 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{selectedConsigner.displayName}</p>
-                      <p className="text-xs text-gray-500 truncate">{selectedConsigner.contactName} · {selectedConsigner.phone}</p>
-                    </div>
-                    <button type="button" onClick={() => { setSelectedConsigner(null); setConsignerProfileId(""); }}
-                      className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input
-                      placeholder="Search consigners..."
-                      value={consignerSearch}
-                      onChange={(e) => handleConsignerSearchChange(e.target.value)}
-                      onFocus={() => setShowConsignerDropdown(true)}
-                      className="pl-9 h-9 text-sm"
-                    />
-                  </div>
-                )}
-                {showConsignerDropdown && !selectedConsigner && (
-                  <div className="rounded-md border border-gray-200 bg-white shadow-md max-h-40 overflow-y-auto">
-                    {consignersQuery.isLoading ? (
-                      <div className="flex items-center justify-center py-3">
-                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                      </div>
-                    ) : consigners.length === 0 ? (
-                      <p className="px-3 py-2 text-sm text-gray-500">No consigners found</p>
-                    ) : (
-                      consigners.map((c) => (
-                        <button key={c.consignerId} type="button"
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-gray-50 transition-colors"
-                          onClick={() => { setSelectedConsigner(c); setConsignerProfileId(c.consignerId); setShowConsignerDropdown(false); setConsignerSearch(""); }}>
-                          <div>
-                            <p className="text-sm text-gray-900">{c.displayName}</p>
-                            <p className="text-xs text-gray-500">{c.contactName} · {c.phone}</p>
+                <Popover open={showConsignerDropdown} onOpenChange={setShowConsignerDropdown}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={showConsignerDropdown}
+                      className={cn(
+                        "w-full h-auto min-h-9 justify-between px-3 py-1.5 text-sm font-normal",
+                        !selectedConsigner && "text-gray-500",
+                      )}
+                    >
+                      {selectedConsigner ? (
+                        <div className="flex items-center gap-2 min-w-0 text-left">
+                          <Check className="h-4 w-4 text-green-600 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {selectedConsigner.displayName}
+                            </p>
+                            <p className="text-[11px] text-gray-500 truncate">
+                              {selectedConsigner.contactName} · {selectedConsigner.phone}
+                            </p>
                           </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
+                        </div>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <Search className="h-4 w-4 text-gray-400" />
+                          Search consigners…
+                        </span>
+                      )}
+                      {selectedConsigner ? (
+                        <span
+                          role="button"
+                          tabIndex={-1}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setSelectedConsigner(null);
+                            setConsignerProfileId("");
+                          }}
+                          className="ml-2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </span>
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-gray-400 opacity-70" />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[280px]" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Type a name or phone…"
+                        value={consignerSearch}
+                        onValueChange={handleConsignerSearchChange}
+                      />
+                      <CommandList>
+                        {consignersQuery.isLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                          </div>
+                        ) : consigners.length === 0 ? (
+                          <CommandEmpty>No consigners found.</CommandEmpty>
+                        ) : (
+                          <CommandGroup>
+                            {consigners.map((c) => (
+                              <CommandItem
+                                key={c.consignerId}
+                                value={`${c.displayName} ${c.contactName} ${c.phone}`}
+                                onSelect={() => {
+                                  setSelectedConsigner(c);
+                                  setConsignerProfileId(c.consignerId);
+                                  setShowConsignerDropdown(false);
+                                  setConsignerSearch("");
+                                }}
+                                className="flex-col items-start gap-0.5"
+                              >
+                                <span className="text-sm text-gray-900">{c.displayName}</span>
+                                <span className="text-[11px] text-gray-500">
+                                  {c.contactName} · {c.phone}
+                                </span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <p className="text-xs text-gray-400">
                   Tracks which consigner this is for. The auction appears as &quot;Airavatl&quot; in the app.
                 </p>
@@ -495,19 +554,97 @@ export default function CreateDeliveryRequestPage() {
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Schedule & Auction</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Consignment Date — Popover + Calendar. User never types; a
+                 *  click opens the picker. Past dates are disabled. */}
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">
                     Consignment Date <span className="text-red-500">*</span>
                   </Label>
-                  <Input type="date" value={consignmentDate} min={today}
-                    onChange={(e) => setConsignmentDate(e.target.value)} className="h-9 text-sm" />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full h-9 justify-start font-normal text-sm px-3",
+                          !consignmentDate && "text-gray-500",
+                        )}
+                      >
+                        <CalendarIcon className="h-4 w-4 mr-2 text-gray-500" />
+                        {consignmentDate
+                          ? format(parseISO(consignmentDate), "EEE, dd MMM yyyy")
+                          : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-auto" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={consignmentDate ? parseISO(consignmentDate) : undefined}
+                        onSelect={(d) => {
+                          if (d) setConsignmentDate(format(d, "yyyy-MM-dd"));
+                        }}
+                        disabled={(d) => d < startOfDay(new Date())}
+                        captionLayout="dropdown"
+                        fromYear={new Date().getFullYear()}
+                        toYear={new Date().getFullYear() + 1}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
+
+                {/* Pickup Time — Popover with preset grid. User never types; each
+                 *  chip sets the time directly. Clearing returns to default. */}
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Pickup Time</Label>
-                  <Input type="time" value={pickupTime}
-                    onChange={(e) => setPickupTime(e.target.value)} className="h-9 text-sm" />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full h-9 justify-start font-normal text-sm px-3",
+                          !pickupTime && "text-gray-500",
+                        )}
+                      >
+                        <Clock className="h-4 w-4 mr-2 text-gray-500" />
+                        {pickupTime ? formatPresetTime(pickupTime) : "Pick a time"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-3 w-64" align="start">
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {PICKUP_TIME_PRESETS.map((slot) => {
+                          const active = pickupTime === slot;
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => setPickupTime(slot)}
+                              className={cn(
+                                "rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                                active
+                                  ? "bg-gray-900 text-white"
+                                  : "bg-gray-50 text-gray-700 hover:bg-gray-100",
+                              )}
+                            >
+                              {formatPresetTime(slot)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {pickupTime && (
+                        <button
+                          type="button"
+                          onClick={() => setPickupTime("")}
+                          className="mt-2 w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                        >
+                          Clear (defaults to 8:00 AM)
+                        </button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
                   <p className="text-[11px] text-gray-400">Defaults to 8:00 AM if not set</p>
                 </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Auction Duration</Label>
                   <Select value={auctionDurationMinutes} onValueChange={setAuctionDurationMinutes}>

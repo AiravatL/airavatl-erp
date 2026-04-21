@@ -351,6 +351,13 @@ export async function DELETE(request: Request, context: RouteParams) {
     await adminClient.auth.admin.updateUserById(userId, { ban_duration: "876000h" }); // ~100 years
     await adminClient.auth.admin.deleteUser(userId, false); // false = don't cascade
 
+    // Stamp deleted_at so this row is excluded from the main admin list and
+    // appears on the "Deleted Users" page for audit.
+    await actorResult.supabase.rpc("admin_mark_user_deleted_v1", {
+      p_actor_user_id: actorResult.actor.id,
+      p_user_id: userId,
+    } as never);
+
     return NextResponse.json({ ok: true, data: { id: userId, removed: true, mode: "permanent" } });
   }
 

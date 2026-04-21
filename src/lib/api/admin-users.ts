@@ -10,6 +10,17 @@ export interface AdminUserRow {
   createdAt: string | null;
 }
 
+export interface DeletedAdminUserRow extends AdminUserRow {
+  deletedAt: string | null;
+}
+
+export async function listDeletedAdminUsers(): Promise<DeletedAdminUserRow[]> {
+  return apiRequest<DeletedAdminUserRow[]>("/api/admin/users/deleted", {
+    method: "GET",
+    cache: "no-store",
+  });
+}
+
 export interface CreateAdminUserInput {
   fullName: string;
   email: string;

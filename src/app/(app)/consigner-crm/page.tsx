@@ -26,7 +26,13 @@ import type { LeadStage, Lead } from "@/lib/types";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
 import { sanitizeSingleLineInput } from "@/lib/validation/client/sanitizers";
 import { sanitizeDecimalInput, sanitizeIntegerInput } from "@/lib/validation/client/validators";
-import { TrendingUp, IndianRupee, Trophy, LayoutGrid, List, Plus, Loader2, AlertTriangle } from "lucide-react";
+import { TrendingUp, IndianRupee, Trophy, LayoutGrid, List, Plus, Loader2, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+
+// Won/Lost columns pile up fast and swamp the board. Anything older than
+// this window collapses into an expandable "Older" tray per column so only
+// the last day of activity is visible by default.
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const TERMINAL_STAGES: LeadStage[] = ["won", "lost"];
 
 const COLUMNS: LeadStage[] = ["new_enquiry", "contacted", "quote_sent", "negotiation", "won", "lost"];
 
@@ -42,6 +48,8 @@ export default function ConsignerPipelinePage() {
   const [draggedLead, setDraggedLead] = useState<{ leadId: string; fromStage: LeadStage } | null>(null);
   const [dropStage, setDropStage] = useState<LeadStage | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Track which terminal columns have their "older" tray expanded.
+  const [expandedOlder, setExpandedOlder] = useState<Record<string, boolean>>({});
 
   // Win-convert dialog state
   const [winConvertLeadId, setWinConvertLeadId] = useState<string | null>(null);
@@ -232,6 +240,39 @@ export default function ConsignerPipelinePage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {COLUMNS.map((col) => {
             const colLeads = leads.filter((l) => l.stage === col);
+            const isTerminal = TERMINAL_STAGES.includes(col);
+            const now = Date.now();
+            const recentLeads = isTerminal
+              ? colLeads.filter((l) => {
+                  const ts = l.updatedAt ? Date.parse(l.updatedAt) : 0;
+                  return ts > 0 && now - ts <= RECENT_WINDOW_MS;
+                })
+              : colLeads;
+            const olderLeads = isTerminal
+              ? colLeads.filter((l) => !recentLeads.includes(l))
+              : [];
+            const isOlderOpen = !!expandedOlder[col];
+
+            const renderCard = (lead: Lead) => {
+              const isConverted = !!lead.convertedCustomerId;
+              return (
+                <LeadCard
+                  key={lead.id}
+                  lead={lead}
+                  isConverted={isConverted}
+                  onDragStart={() => {
+                    if (isConverted) return;
+                    setActionError(null);
+                    setDraggedLead({ leadId: lead.id, fromStage: lead.stage });
+                  }}
+                  onDragEnd={() => {
+                    setDraggedLead(null);
+                    setDropStage(null);
+                  }}
+                />
+              );
+            };
+
             return (
               <div
                 key={col}
@@ -255,29 +296,38 @@ export default function ConsignerPipelinePage() {
                   <span className="text-[11px] text-gray-400">{colLeads.length}</span>
                 </div>
                 <div className="space-y-2">
-                  {colLeads.map((lead) => {
-                    const isConverted = !!lead.convertedCustomerId;
-                    return (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        isConverted={isConverted}
-                        onDragStart={() => {
-                          if (isConverted) return;
-                          setActionError(null);
-                          setDraggedLead({ leadId: lead.id, fromStage: lead.stage });
-                        }}
-                        onDragEnd={() => {
-                          setDraggedLead(null);
-                          setDropStage(null);
-                        }}
-                      />
-                    );
-                  })}
+                  {recentLeads.map(renderCard)}
+
+                  {isTerminal && olderLeads.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedOlder((prev) => ({ ...prev, [col]: !prev[col] }))
+                        }
+                        className="flex w-full items-center justify-between rounded-md border border-dashed border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-600 hover:bg-gray-50"
+                      >
+                        <span>Older ({olderLeads.length})</span>
+                        {isOlderOpen ? (
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                      {isOlderOpen && olderLeads.map(renderCard)}
+                    </>
+                  )}
+
                   {colLeads.length === 0 && (
                     <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center">
                       <p className="text-xs text-gray-400">No leads</p>
                     </div>
+                  )}
+
+                  {isTerminal && recentLeads.length === 0 && olderLeads.length > 0 && (
+                    <p className="px-1 text-[11px] text-gray-400">
+                      No activity in the last 24h
+                    </p>
                   )}
                 </div>
               </div>
