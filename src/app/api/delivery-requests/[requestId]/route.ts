@@ -37,7 +37,6 @@ export async function GET(
   const result = rpcData as {
     request: Record<string, unknown>;
     bids: Array<Record<string, unknown>>;
-    winner_selection: Record<string, unknown> | null;
     erp_metadata: Record<string, unknown> | null;
   } | null;
 

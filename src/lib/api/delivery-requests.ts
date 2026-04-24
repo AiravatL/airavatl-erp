@@ -124,8 +124,6 @@ export interface AuctionBidRow {
   bidder_phone: string;
   vehicle_id: string | null;
   status: string;
-  is_shortlisted: boolean;
-  shortlist_rank: number | null;
   estimated_pickup_time: string | null;
   estimated_delivery_time: string | null;
   bid_notes: string | null;
@@ -136,7 +134,6 @@ export interface AuctionBidRow {
 export interface AuctionDetailResponse {
   request: Record<string, unknown>;
   bids: AuctionBidRow[];
-  winner_selection: Record<string, unknown> | null;
   erp_metadata: {
     created_by_admin_id: string;
     created_by_name: string;

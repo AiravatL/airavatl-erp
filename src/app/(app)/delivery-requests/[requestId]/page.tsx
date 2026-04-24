@@ -89,7 +89,6 @@ export default function AuctionDetailPage({
 
   const req = data?.request as Record<string, unknown> | undefined;
   const bids = data?.bids ?? [];
-  const winnerSelection = data?.winner_selection;
   const erpMetadata = data?.erp_metadata;
   const isErpAuction = !!erpMetadata;
 
@@ -410,16 +409,6 @@ export default function AuctionDetailPage({
             </CardContent>
           </Card>
 
-          {/* Winner Selection */}
-          {winnerSelection && Object.keys(winnerSelection).length > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Winner Selection</h3>
-                <WinnerSelectionContent ws={winnerSelection as Record<string, unknown>} />
-              </CardContent>
-            </Card>
-          )}
-
           {/* Cancellation Info */}
           {status === "cancelled" && (
             <Card>
@@ -600,24 +589,6 @@ export default function AuctionDetailPage({
         description={`Status: ${status}${bids.length > 0 ? ` · ${bids.length} bid(s) will be deleted` : ""}`}
       />
     </>
-  );
-}
-
-function WinnerSelectionContent({ ws }: { ws: Record<string, unknown> }) {
-  const deadline = ws.selection_deadline as string | null;
-  const selectedBidId = ws.selected_bid_id as string | null;
-  const tripId = ws.trip_id as string | null;
-
-  return (
-    <div className="space-y-2 text-sm">
-      {deadline ? <DetailRow label="Deadline" value={formatDate(deadline)} /> : null}
-      {selectedBidId ? (
-        <p className="text-green-700">Winner has been selected</p>
-      ) : (
-        <p className="text-amber-600">Awaiting consigner selection in the app</p>
-      )}
-      {tripId ? <DetailRow label="Trip Created" value={tripId} /> : null}
-    </div>
   );
 }
 
