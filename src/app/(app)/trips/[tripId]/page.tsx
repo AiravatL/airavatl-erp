@@ -37,6 +37,7 @@ import { TripTimeline } from "./_components/trip-timeline";
 import { SignedImagePreview } from "@/components/shared/signed-image-preview";
 import { AdminDeleteDialog } from "@/components/shared/admin-delete-dialog";
 import { HoldingChargesCard } from "./holding-charges-card";
+import { AdvanceAmountDialog } from "./advance-amount-dialog";
 import dynamic from "next/dynamic";
 
 const TripMap = dynamic(() => import("@/components/shared/trip-map").then((m) => ({ default: m.TripMap })), { ssr: false });
@@ -74,6 +75,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
   const isOps = user ? OPS_ROLES.has(user.role) : false;
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
 
   const tripQuery = useQuery({
     queryKey: queryKeys.trip(tripId),
@@ -448,9 +450,15 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                   size="sm"
                   className="h-7 text-[11px] gap-1 w-full"
                   disabled={requestPaymentMutation.isPending}
-                  onClick={() => requestPaymentMutation.mutate(needsAdvanceRequest ? "advance" : "final")}
+                  onClick={() => {
+                    if (needsAdvanceRequest) {
+                      setAdvanceDialogOpen(true);
+                    } else {
+                      requestPaymentMutation.mutate("final");
+                    }
+                  }}
                 >
-                  {requestPaymentMutation.isPending ? (
+                  {requestPaymentMutation.isPending && !needsAdvanceRequest ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
                     <Banknote className="h-3 w-3" />
@@ -720,6 +728,21 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
         label={trip.trip_number as string}
         description={`Status: ${statusLabel} · All payments, proofs, and ratings will be deleted`}
       />
+
+      {advanceDialogOpen && (
+        <AdvanceAmountDialog
+          tripId={tripId}
+          driverBidAmount={driverBidAmount}
+          onClose={() => setAdvanceDialogOpen(false)}
+          onSuccess={() => {
+            setAdvanceDialogOpen(false);
+            queryClient.invalidateQueries({ queryKey: queryKeys.trip(tripId) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.tripPaymentSummary(tripId) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.tripPaymentRequests(tripId) });
+            queryClient.invalidateQueries({ queryKey: ["payments"] });
+          }}
+        />
+      )}
     </div>
   );
 }
