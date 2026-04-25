@@ -18,6 +18,7 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import { getCustomerById, listCustomerReceivables, listCustomerTrips, updateCustomer } from "@/lib/api/customers";
 import { APP_TRIP_STATUS_LABELS } from "@/lib/types";
 import { queryKeys } from "@/lib/query/keys";
+import { PortalAccessCard } from "./portal-access-card";
 import {
   ArrowLeft, Phone, Mail, MapPin, Building2,
   Truck, Loader2, FileText, Tag, Pencil, Save,
@@ -260,6 +261,9 @@ export default function CustomerDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Portal Access */}
+          <PortalAccessCard customerId={customerId} isAdmin={isAdmin} />
 
           {/* Receivables */}
           <Card>

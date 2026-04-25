@@ -17,6 +17,8 @@ export const queryKeys = {
     ["customers", "trips", customerId, paging ?? {}] as const,
   customerReceivables: (customerId: string, paging?: { limit?: number; offset?: number }) =>
     ["customers", "receivables", customerId, paging ?? {}] as const,
+  customerPortalUsers: (customerId: string) =>
+    ["customers", "portal-users", customerId] as const,
   fleetVehicles: (filters: {
     search?: string;
     status?: string;
