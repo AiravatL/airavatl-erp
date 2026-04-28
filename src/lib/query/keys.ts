@@ -60,6 +60,7 @@ export const queryKeys = {
   }) => ["delivery-requests", "list", filters] as const,
   deliveryRequest: (requestId: string) =>
     ["delivery-requests", "detail", requestId] as const,
+  deliveryRequestStats: ["delivery-requests", "stats"] as const,
   deliveryRequestConsigners: (search?: string) =>
     ["delivery-requests", "consigners", search ?? ""] as const,
   platformSetting: (key: string) =>

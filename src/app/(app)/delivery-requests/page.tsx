@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 // Select removed — using button filters instead
-import { listDeliveryRequests } from "@/lib/api/delivery-requests";
+import { listDeliveryRequests, getDeliveryRequestStats } from "@/lib/api/delivery-requests";
 import { AuctionRowMenu } from "@/components/shared/auction-row-menu";
 import type { AuctionListItem } from "@/lib/api/delivery-requests";
 import { queryKeys } from "@/lib/query/keys";
@@ -49,6 +49,18 @@ export default function DeliveryRequestsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<"erp" | "app">("erp");
 
+  // KPI counts come from a dedicated RPC so they stay stable as the user
+  // changes search / status filters on the list below.
+  const statsQuery = useQuery({
+    queryKey: queryKeys.deliveryRequestStats,
+    queryFn: getDeliveryRequestStats,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
+  });
+  const erpStats = statsQuery.data?.erp ?? { open: 0, active: 0 };
+  const appStats = statsQuery.data?.app ?? { open: 0, active: 0 };
+
   // ERP state
   const [erpSearch, setErpSearch] = useState("");
   const erpDebouncedSearch = useDebouncedValue(erpSearch, 300);
@@ -75,7 +87,6 @@ export default function DeliveryRequestsPage() {
   // Filter out terminal statuses (those belong in history)
   const erpAllItems = erpQuery.data?.items ?? [];
   const erpItems = erpStatus ? erpAllItems : erpAllItems.filter((i) => !TERMINAL.has(i.status));
-  const erpTotal = erpStatus ? (erpQuery.data?.total ?? 0) : erpItems.length;
 
   // App state
   const [appSearch, setAppSearch] = useState("");
@@ -101,10 +112,6 @@ export default function DeliveryRequestsPage() {
   });
   const appAllItems = appQuery.data?.items ?? [];
   const appItems = appStatus ? appAllItems : appAllItems.filter((i) => !TERMINAL.has(i.status));
-  const appTotal = appStatus ? (appQuery.data?.total ?? 0) : appItems.length;
-
-  const erpActive = erpItems.filter((i) => i.status === "active").length;
-  const appActive = appItems.filter((i) => i.status === "active").length;
 
   return (
     <>
@@ -120,16 +127,16 @@ export default function DeliveryRequestsPage() {
       </PageHeader>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard label="ERP Auctions" value={erpTotal.toLocaleString("en-IN")} />
-        <KpiCard label="App Auctions" value={appTotal.toLocaleString("en-IN")} />
-        <KpiCard label="ERP Active" value={erpActive.toLocaleString("en-IN")} />
-        <KpiCard label="App Active" value={appActive.toLocaleString("en-IN")} />
+        <KpiCard label="ERP Auctions" value={erpStats.open.toLocaleString("en-IN")} />
+        <KpiCard label="App Auctions" value={appStats.open.toLocaleString("en-IN")} />
+        <KpiCard label="ERP Active" value={erpStats.active.toLocaleString("en-IN")} />
+        <KpiCard label="App Active" value={appStats.active.toLocaleString("en-IN")} />
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "erp" | "app")}>
         <TabsList className="bg-gray-100 h-8">
-          <TabsTrigger value="erp" className="text-xs h-7 data-[state=active]:bg-white">ERP ({erpTotal})</TabsTrigger>
-          <TabsTrigger value="app" className="text-xs h-7 data-[state=active]:bg-white">App ({appTotal})</TabsTrigger>
+          <TabsTrigger value="erp" className="text-xs h-7 data-[state=active]:bg-white">ERP ({erpStats.open})</TabsTrigger>
+          <TabsTrigger value="app" className="text-xs h-7 data-[state=active]:bg-white">App ({appStats.open})</TabsTrigger>
         </TabsList>
 
         {/* ERP Tab */}
@@ -213,7 +220,7 @@ export default function DeliveryRequestsPage() {
                   </Link>
                 ))}
               </div>
-              <Pagination total={erpTotal} offset={erpOffset} onOffsetChange={setErpOffset} />
+              <Pagination total={erpQuery.data?.total ?? 0} offset={erpOffset} onOffsetChange={setErpOffset} />
             </>
           )}
         </TabsContent>
@@ -298,7 +305,7 @@ export default function DeliveryRequestsPage() {
                   </Link>
                 ))}
               </div>
-              <Pagination total={appTotal} offset={appOffset} onOffsetChange={setAppOffset} />
+              <Pagination total={appQuery.data?.total ?? 0} offset={appOffset} onOffsetChange={setAppOffset} />
             </>
           )}
         </TabsContent>

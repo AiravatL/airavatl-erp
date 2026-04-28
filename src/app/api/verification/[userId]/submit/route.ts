@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { isMissingRpcError } from "@/lib/supabase/rpc";
 import { mapRpcError, requireVerificationActor } from "@/app/api/verification/_shared";
+import {
+  createDriverFundAccount,
+  RazorpayXOnboardingError,
+  type DriverType,
+  type PayoutMethod,
+} from "@/lib/payouts/razorpayx";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface SubmitBody {
   // Driver fields
@@ -28,6 +35,109 @@ interface SubmitBody {
 
 function toStr(value: unknown): string | null {
   return typeof value === "string" ? value.trim() || null : null;
+}
+
+interface PayoutOnboardingResult {
+  status: "active" | "pending_razorpayx";
+  razorpayxContactId?: string;
+  razorpayxFundAccountId?: string;
+  error?: { code: string; message: string };
+}
+
+/**
+ * After the verification RPC has written the row in
+ * `pending_razorpayx` state, create the RazorpayX contact + fund
+ * account and call the finalize RPC. If the HTTP onboarding fails the
+ * driver row stays in pending — the admin can retry without losing
+ * the verified KYC state.
+ */
+async function onboardRazorpayX(opts: {
+  supabase: SupabaseClient;
+  actorUserId: string;
+  partnerUserId: string;
+  driverType: DriverType;
+  payoutMethod: PayoutMethod;
+  bankAccountNumber: string | null;
+  bankIfscCode: string | null;
+  bankAccountHolderName: string | null;
+  upiVpa: string | null;
+}): Promise<PayoutOnboardingResult> {
+  const {
+    supabase, actorUserId, partnerUserId, driverType, payoutMethod,
+    bankAccountNumber, bankIfscCode, bankAccountHolderName, upiVpa,
+  } = opts;
+
+  const { data: profile, error: profileError } = await supabase
+    .from("user_profiles")
+    .select("full_name, phone")
+    .eq("id", partnerUserId)
+    .single();
+
+  if (profileError || !profile?.full_name || !profile?.phone) {
+    return {
+      status: "pending_razorpayx",
+      error: {
+        code: "PROFILE_LOOKUP_FAILED",
+        message: profileError?.message ?? "Could not load partner profile for RazorpayX onboarding",
+      },
+    };
+  }
+
+  try {
+    const { contactId, fundAccountId } = await createDriverFundAccount({
+      userId: partnerUserId,
+      fullName: profile.full_name,
+      phone: profile.phone,
+      userType: driverType,
+      payoutMethod,
+      bankAccountNumber,
+      bankIfscCode,
+      bankAccountHolderName,
+      upiVpa,
+    });
+
+    const { error: finalizeError } = await supabase.rpc(
+      "verification_finalize_payout_v1",
+      {
+        p_actor_user_id: actorUserId,
+        p_user_id: partnerUserId,
+        p_razorpayx_contact_id: contactId,
+        p_razorpayx_fund_account_id: fundAccountId,
+      } as never,
+    );
+
+    if (finalizeError) {
+      return {
+        status: "pending_razorpayx",
+        razorpayxContactId: contactId,
+        razorpayxFundAccountId: fundAccountId,
+        error: {
+          code: finalizeError.code ?? "FINALIZE_RPC_FAILED",
+          message: finalizeError.message ?? "Failed to finalize payout settings",
+        },
+      };
+    }
+
+    return {
+      status: "active",
+      razorpayxContactId: contactId,
+      razorpayxFundAccountId: fundAccountId,
+    };
+  } catch (err) {
+    if (err instanceof RazorpayXOnboardingError) {
+      return {
+        status: "pending_razorpayx",
+        error: { code: err.code, message: err.message },
+      };
+    }
+    return {
+      status: "pending_razorpayx",
+      error: {
+        code: "UNKNOWN",
+        message: err instanceof Error ? err.message : "Unknown RazorpayX error",
+      },
+    };
+  }
 }
 
 export async function POST(
@@ -107,9 +217,27 @@ export async function POST(
     }
 
     const result = (rpcData ?? null) as { user_id?: string; verified_at?: string } | null;
+    const partnerUserId = result?.user_id ?? userId;
+    const upiVpa = toStr(body.upiId);
+    const payoutOnboarding = await onboardRazorpayX({
+      supabase: actorResult.supabase,
+      actorUserId: actorResult.actor.id,
+      partnerUserId,
+      driverType: "individual_driver",
+      payoutMethod: upiVpa ? "upi" : "bank_account",
+      bankAccountNumber,
+      bankIfscCode,
+      bankAccountHolderName,
+      upiVpa,
+    });
+
     return NextResponse.json({
       ok: true,
-      data: { userId: result?.user_id ?? userId, verifiedAt: result?.verified_at ?? new Date().toISOString() },
+      data: {
+        userId: partnerUserId,
+        verifiedAt: result?.verified_at ?? new Date().toISOString(),
+        payoutOnboarding,
+      },
     });
   }
 
@@ -161,8 +289,25 @@ export async function POST(
   }
 
   const result = (rpcData ?? null) as { user_id?: string; verified_at?: string } | null;
+  const partnerUserId = result?.user_id ?? userId;
+  const upiVpa = toStr(body.upiId);
+  const payoutOnboarding = await onboardRazorpayX({
+    supabase: actorResult.supabase,
+    actorUserId: actorResult.actor.id,
+    partnerUserId,
+    driverType: "transporter",
+    payoutMethod: upiVpa ? "upi" : "bank_account",
+    bankAccountNumber,
+    bankIfscCode,
+    bankAccountHolderName,
+    upiVpa,
+  });
   return NextResponse.json({
     ok: true,
-    data: { userId: result?.user_id ?? userId, verifiedAt: result?.verified_at ?? new Date().toISOString() },
+    data: {
+      userId: partnerUserId,
+      verifiedAt: result?.verified_at ?? new Date().toISOString(),
+      payoutOnboarding,
+    },
   });
 }

@@ -151,6 +151,18 @@ export interface AuctionDetailResponse {
 
 // -- Delivery Request API --
 
+export interface AuctionStatsResponse {
+  erp: { open: number; active: number };
+  app: { open: number; active: number };
+}
+
+export async function getDeliveryRequestStats(): Promise<AuctionStatsResponse> {
+  return apiRequest<AuctionStatsResponse>("/api/delivery-requests/stats", {
+    method: "GET",
+    cache: "no-store",
+  });
+}
+
 export async function listDeliveryRequests(filters: {
   search?: string;
   status?: string;
