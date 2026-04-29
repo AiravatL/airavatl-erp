@@ -15,11 +15,14 @@ import { Eye, Loader2 } from "lucide-react";
 
 function objectKeyExtension(objectKey: string): string {
   const clean = objectKey.split("?")[0] ?? objectKey;
-  const ext = clean.split(".").pop() ?? "";
+  const lastSegment = clean.split("/").pop() ?? "";
+  if (!lastSegment.includes(".")) return "";
+  const ext = lastSegment.split(".").pop() ?? "";
   return ext.toLowerCase();
 }
 
-function isPdfObjectKey(objectKey: string): boolean {
+function isPdfObjectKey(objectKey: string, mimeType?: string | null): boolean {
+  if (mimeType && mimeType.toLowerCase() === "application/pdf") return true;
   return objectKeyExtension(objectKey) === "pdf";
 }
 
@@ -35,11 +38,13 @@ export function SignedImagePreview({
   objectKey,
   label,
   source = "payment",
+  mimeType = null,
 }: {
   objectKey: string;
   label: string;
   /** "payment" uses the payment-specific endpoint, "trip" uses the general trip proof endpoint */
   source?: "payment" | "trip";
+  mimeType?: string | null;
 }) {
   const [show, setShow] = useState(false);
 
@@ -52,7 +57,7 @@ export function SignedImagePreview({
     staleTime: 4 * 60_000,
     gcTime: 15 * 60_000,
   });
-  const isPdf = isPdfObjectKey(objectKey);
+  const isPdf = isPdfObjectKey(objectKey, mimeType);
 
   return (
     <>

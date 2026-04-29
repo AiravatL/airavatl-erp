@@ -793,7 +793,11 @@ function CollectionHistoryForReceivable({ receivableId, tripNumber }: { receivab
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {c.proof_object_key && (
-              <SignedImagePreview objectKey={c.proof_object_key} label={`Collection proof — ${tripNumber}`} />
+              <SignedImagePreview
+                objectKey={c.proof_object_key}
+                label={`Collection proof — ${tripNumber}`}
+                mimeType={c.proof_mime_type}
+              />
             )}
             <span className="text-gray-400">{formatDate(c.payment_date)}</span>
           </div>

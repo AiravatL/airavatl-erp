@@ -22,6 +22,7 @@ interface QueueRow {
   upi_id: string | null;
   upi_qr_object_key: string | null;
   paid_proof_object_key: string | null;
+  paid_proof_mime_type: string | null;
   payment_reference: string | null;
   notes: string | null;
   requested_by_id: string;
@@ -85,6 +86,7 @@ export async function GET(request: Request) {
     upiId: row.upi_id,
     upiQrObjectKey: row.upi_qr_object_key,
     paidProofObjectKey: row.paid_proof_object_key,
+    paidProofMimeType: row.paid_proof_mime_type,
     paymentReference: row.payment_reference,
     notes: row.notes ?? "",
     requestedById: row.requested_by_id,

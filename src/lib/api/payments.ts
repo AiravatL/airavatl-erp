@@ -26,6 +26,7 @@ export interface PaymentQueueItem {
   upiId: string | null;
   upiQrObjectKey: string | null;
   paidProofObjectKey: string | null;
+  paidProofMimeType: string | null;
   paymentReference: string | null;
   notes: string;
   requestedById: string;

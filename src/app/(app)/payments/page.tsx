@@ -150,7 +150,11 @@ function QueueCard({
         )}
 
         {payment.paidProofObjectKey && (
-          <SignedImagePreview objectKey={payment.paidProofObjectKey} label="Payment Proof" />
+          <SignedImagePreview
+            objectKey={payment.paidProofObjectKey}
+            label="Payment Proof"
+            mimeType={payment.paidProofMimeType}
+          />
         )}
 
         {canMarkPaid && isActionable(payment) && (
@@ -367,7 +371,11 @@ export default function PaymentsPage() {
                             </Button>
                           )}
                           {payment.paidProofObjectKey && (
-                            <SignedImagePreview objectKey={payment.paidProofObjectKey} label="Proof" />
+                            <SignedImagePreview
+                              objectKey={payment.paidProofObjectKey}
+                              label="Proof"
+                              mimeType={payment.paidProofMimeType}
+                            />
                           )}
                         </div>
                       ))}

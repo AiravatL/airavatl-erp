@@ -85,6 +85,7 @@ export interface CollectionItem {
   payment_method: string;
   payment_reference: string | null;
   proof_object_key: string | null;
+  proof_mime_type: string | null;
   notes: string | null;
   recorded_by: string;
   recorded_by_name: string;
