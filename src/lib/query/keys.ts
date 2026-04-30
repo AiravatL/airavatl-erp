@@ -92,6 +92,7 @@ export const queryKeys = {
   receivableBulkCollectionProof: (consignerProfileId: string) => ["receivables", "proof-upload", "bulk", consignerProfileId] as const,
   appOverview: (filters: { from?: string; to?: string }) =>
     ["reports", "app-overview", filters] as const,
+  operationsHealth: ["reports", "operations-health"] as const,
   appAuctions: (filters: { status?: string; requestType?: string; search?: string; limit?: number; offset?: number }) =>
     ["reports", "app-auctions", filters] as const,
   appTrips: (filters: { status?: string; search?: string; limit?: number; offset?: number }) =>

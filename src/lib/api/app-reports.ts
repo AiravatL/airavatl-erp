@@ -12,6 +12,16 @@ export interface BreakdownItem {
   value: number;
 }
 
+export interface OperationsHealth {
+  stuckDriverPayouts: number;
+  partnersPendingOnboarding: number;
+  tripsOverdueForPayment: number;
+  pushQueueBacklog: number;
+  dpsValidatedWithoutRazorpayx: number;
+  tripsAmountDrift: number;
+  asOf: string;
+}
+
 export interface AppOverview {
   metrics: {
     totalUsers: number;
@@ -306,6 +316,22 @@ function normalizeDriverLocation(row: Record<string, unknown>): DriverLocationIt
 }
 
 /* ---------- Fetchers ---------- */
+
+export async function getOperationsHealth(): Promise<OperationsHealth> {
+  const raw = await apiRequest<Record<string, unknown>>(
+    `/api/reports/operations-health`,
+    { method: "GET", cache: "no-store" },
+  );
+  return {
+    stuckDriverPayouts: toNum(raw.stuck_driver_payouts),
+    partnersPendingOnboarding: toNum(raw.partners_pending_onboarding),
+    tripsOverdueForPayment: toNum(raw.trips_overdue_for_payment),
+    pushQueueBacklog: toNum(raw.push_queue_backlog),
+    dpsValidatedWithoutRazorpayx: toNum(raw.dps_validated_without_razorpayx),
+    tripsAmountDrift: toNum(raw.trips_amount_drift),
+    asOf: str(raw.as_of),
+  };
+}
 
 export async function getAppOverview(filters: OverviewFilters = {}): Promise<AppOverview> {
   const raw = await apiRequest<Record<string, unknown>>(

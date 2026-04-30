@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CreditCard, Users, LineChart as LineChartIcon } from "lucide-react";
+import { BarChart3, CreditCard, Users, LineChart as LineChartIcon, Activity, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { DateRangeFilterBar, createDefaultDateRange, type DateRangeFilters } from "@/components/reports/filter-bar";
 import { KpiCard } from "@/components/reports/kpi-card";
@@ -11,8 +11,9 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
-import { getAppOverview } from "@/lib/api/app-reports";
+import { getAppOverview, getOperationsHealth, type OperationsHealth } from "@/lib/api/app-reports";
 import { queryKeys } from "@/lib/query/keys";
 
 const PIE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#14b8a6"];
@@ -29,6 +30,12 @@ const MODULE_CARDS = [
 
 export default function ReportsPage() {
   const [filters, setFilters] = useState<DateRangeFilters>(createDefaultDateRange);
+
+  const healthQuery = useQuery({
+    queryKey: queryKeys.operationsHealth,
+    queryFn: getOperationsHealth,
+    refetchInterval: 60_000, // refresh every minute — these are point-in-time signals
+  });
 
   const overviewQuery = useQuery({
     queryKey: queryKeys.appOverview(filters),
@@ -50,6 +57,9 @@ export default function ReportsPage() {
   return (
     <div className="space-y-4 p-4 sm:p-6">
       <PageHeader title="Reports Overview" description="Platform metrics and app data analytics" />
+
+      <OperationsHealthSection health={healthQuery.data} isLoading={healthQuery.isLoading} />
+
       <DateRangeFilterBar filters={filters} onChange={setFilters} />
 
       {overviewQuery.isLoading ? (
@@ -158,6 +168,161 @@ export default function ReportsPage() {
         </>
       )}
     </div>
+  );
+}
+
+type HealthSeverity = "ok" | "warn" | "critical";
+
+interface HealthCardConfig {
+  label: string;
+  description: string;
+  href?: string;
+  // ok = expected when 0; warn = action recommended; critical = sanity-check that
+  // SHOULD always be 0 (a non-zero means a constraint was bypassed somehow).
+  severity: (count: number) => HealthSeverity;
+}
+
+const HEALTH_CARDS: { key: keyof Omit<OperationsHealth, "asOf">; config: HealthCardConfig }[] = [
+  {
+    key: "stuckDriverPayouts",
+    config: {
+      label: "Stuck driver payouts",
+      description: "Processing >6h. Resolves on RazorpayX webhook or polling.",
+      href: "/payments",
+      severity: (n) => (n === 0 ? "ok" : "warn"),
+    },
+  },
+  {
+    key: "partnersPendingOnboarding",
+    config: {
+      label: "Partners pending onboarding",
+      description: "KYC verified but RazorpayX not yet linked. Click Retry on their verification page.",
+      href: "/verification",
+      severity: (n) => (n === 0 ? "ok" : "warn"),
+    },
+  },
+  {
+    key: "tripsOverdueForPayment",
+    config: {
+      label: "Trips overdue (>24h)",
+      description: "Trips waiting on accounts to mark advance/final paid.",
+      href: "/payments",
+      severity: (n) => (n === 0 ? "ok" : "warn"),
+    },
+  },
+  {
+    key: "pushQueueBacklog",
+    config: {
+      label: "Push queue backlog",
+      description: "Pending notifications. Cron should drain this every minute.",
+      severity: (n) => (n === 0 ? "ok" : n > 100 ? "critical" : "warn"),
+    },
+  },
+  {
+    key: "dpsValidatedWithoutRazorpayx",
+    config: {
+      label: "Validated w/o RazorpayX (constraint check)",
+      description: "Should always be 0. CHECK constraint enforces this. Non-zero = constraint bypassed.",
+      severity: (n) => (n === 0 ? "ok" : "critical"),
+    },
+  },
+  {
+    key: "tripsAmountDrift",
+    config: {
+      label: "Trip amount drift (constraint check)",
+      description: "Should always be 0. advance + final must equal total. Non-zero = constraint bypassed.",
+      severity: (n) => (n === 0 ? "ok" : "critical"),
+    },
+  },
+];
+
+function OperationsHealthSection({ health, isLoading }: { health: OperationsHealth | undefined; isLoading: boolean }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Activity className="h-4 w-4 text-gray-700" />
+            Operations Health
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Point-in-time signals admins should act on. Refreshes every minute.
+          </CardDescription>
+        </div>
+        {health?.asOf ? (
+          <span className="text-[11px] text-gray-400">
+            as of {new Date(health.asOf).toLocaleTimeString()}
+          </span>
+        ) : null}
+      </CardHeader>
+      <CardContent>
+        {isLoading && !health ? (
+          <p className="text-xs text-gray-500">Loading…</p>
+        ) : !health ? (
+          <p className="text-xs text-red-600">Unable to load operations health.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+            {HEALTH_CARDS.map(({ key, config }) => {
+              const value = health[key] as number;
+              const severity = config.severity(value);
+              return (
+                <HealthCard key={String(key)} value={value} severity={severity} config={config} />
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HealthCard({
+  value,
+  severity,
+  config,
+}: {
+  value: number;
+  severity: HealthSeverity;
+  config: HealthCardConfig;
+}) {
+  const tone = {
+    ok: "border-emerald-200 bg-emerald-50/40",
+    warn: "border-amber-300 bg-amber-50",
+    critical: "border-red-300 bg-red-50",
+  }[severity];
+
+  const valueTone = {
+    ok: "text-emerald-700",
+    warn: "text-amber-800",
+    critical: "text-red-700",
+  }[severity];
+
+  const Icon = severity === "ok" ? CheckCircle2 : AlertTriangle;
+  const iconTone = {
+    ok: "text-emerald-600",
+    warn: "text-amber-600",
+    critical: "text-red-600",
+  }[severity];
+
+  const inner = (
+    <div className={cn("rounded-lg border p-3 transition-colors", tone, config.href ? "hover:bg-opacity-80" : "")}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-gray-600">{config.label}</p>
+          <p className={cn("mt-1 text-2xl font-semibold leading-none", valueTone)}>{value.toLocaleString("en-IN")}</p>
+        </div>
+        <Icon className={cn("h-4 w-4 shrink-0", iconTone)} />
+      </div>
+      <p className="mt-2 text-[10px] leading-tight text-gray-500">{config.description}</p>
+    </div>
+  );
+
+  return config.href ? (
+    <Link href={config.href} className="block">
+      {inner}
+    </Link>
+  ) : (
+    inner
   );
 }
 
