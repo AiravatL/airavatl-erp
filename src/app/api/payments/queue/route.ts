@@ -25,10 +25,14 @@ interface QueueRow {
   paid_proof_mime_type: string | null;
   payment_reference: string | null;
   notes: string | null;
-  requested_by_id: string;
+  pickup_city: string | null;
+  delivery_city: string | null;
+  requested_by_id: string | null;
   requested_by_name: string | null;
+  requested_by_role: string | null;
   reviewed_by_id: string | null;
   reviewed_by_name: string | null;
+  reviewed_by_role: string | null;
   reviewed_at: string | null;
   created_at: string;
 }
@@ -89,10 +93,14 @@ export async function GET(request: Request) {
     paidProofMimeType: row.paid_proof_mime_type,
     paymentReference: row.payment_reference,
     notes: row.notes ?? "",
+    pickupCity: row.pickup_city ?? "",
+    deliveryCity: row.delivery_city ?? "",
     requestedById: row.requested_by_id,
     requestedByName: row.requested_by_name ?? "",
+    requestedByRole: row.requested_by_role ?? "",
     reviewedById: row.reviewed_by_id,
     reviewedByName: row.reviewed_by_name ?? "",
+    reviewedByRole: row.reviewed_by_role ?? "",
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
   }));

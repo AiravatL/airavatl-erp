@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -343,15 +344,47 @@ export default function PaymentsPage() {
             return [...grouped.entries()].map(([tripId, payments]) => {
               const first = payments[0];
               const erp = isErpPayment(first);
+              const route = first.pickupCity || first.deliveryCity
+                ? `${first.pickupCity || "?"} → ${first.deliveryCity || "?"}`
+                : null;
               return (
                 <Card key={tripId}>
                   <CardContent className="p-3 sm:p-4">
-                    {/* Trip header */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-semibold text-gray-900">{first.tripCode}</span>
+                    {/* Trip header — code + ERP tag + beneficiary + route */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
+                      <Link
+                        href={`/trips/${tripId}`}
+                        className="text-sm font-semibold text-gray-900 hover:text-primary"
+                      >
+                        {first.tripCode}
+                      </Link>
                       {erp && <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-600 font-medium">ERP</span>}
-                      <span className="text-xs text-gray-500">Pay to: <span className="font-medium text-gray-900">{first.beneficiary || "N/A"}</span></span>
+                      {route && (
+                        <span className="text-[11px] text-gray-500">
+                          <span className="font-medium text-gray-700">{route}</span>
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-500 ml-auto">
+                        Pay to: <span className="font-medium text-gray-900">{first.beneficiary || "N/A"}</span>
+                      </span>
                     </div>
+
+                    {/* Requester / Reviewer trail */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2 text-[11px] text-gray-500">
+                      {first.requestedByName && (
+                        <span>
+                          Requested by <span className="font-medium text-gray-700">{first.requestedByName}</span>
+                          {first.requestedByRole && <span className="text-gray-400"> · {first.requestedByRole}</span>}
+                        </span>
+                      )}
+                      {first.reviewedByName && (
+                        <span>
+                          Marked paid by <span className="font-medium text-gray-700">{first.reviewedByName}</span>
+                          {first.reviewedByRole && <span className="text-gray-400"> · {first.reviewedByRole}</span>}
+                        </span>
+                      )}
+                    </div>
+
                     {/* Payment rows inside this trip */}
                     <div className="space-y-1.5">
                       {payments.map((payment) => (

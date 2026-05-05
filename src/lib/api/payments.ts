@@ -29,10 +29,14 @@ export interface PaymentQueueItem {
   paidProofMimeType: string | null;
   paymentReference: string | null;
   notes: string;
-  requestedById: string;
+  pickupCity: string;
+  deliveryCity: string;
+  requestedById: string | null;
   requestedByName: string;
+  requestedByRole: string;
   reviewedById: string | null;
   reviewedByName: string;
+  reviewedByRole: string;
   reviewedAt: string | null;
   createdAt: string;
 }
