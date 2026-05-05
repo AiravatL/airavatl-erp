@@ -62,8 +62,15 @@ function QueueCard({
   canMarkPaid: boolean;
   onMarkPaid: (payment: PaymentQueueItem) => void;
 }) {
-  const showBankDetails = payment.paymentMethod === "bank" || payment.paymentMethod === "bank_transfer";
-  const showUpiDetails = payment.paymentMethod === "upi";
+  // Always show whichever payout details the partner has on file. Gating on
+  // paymentMethod alone hides UPI when the trip's payment_method was set to
+  // bank_transfer but the partner also has a UPI VPA — accounts may want
+  // either rail to mark the payment paid.
+  const hasBank = !!(payment.bankAccountNumber || payment.bankAccountHolder || payment.bankIfsc);
+  const hasUpi = !!payment.upiId;
+  const isUpiPreferred = payment.paymentMethod === "upi";
+  const showBankDetails = hasBank || (!hasUpi && (payment.paymentMethod === "bank" || payment.paymentMethod === "bank_transfer"));
+  const showUpiDetails = hasUpi || (!hasBank && payment.paymentMethod === "upi");
   const erp = isErpPayment(payment);
 
   return (
@@ -132,13 +139,19 @@ function QueueCard({
             <>
               {payment.upiId ? (
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">UPI ID</span>
+                  <span className="text-gray-500">
+                    UPI ID
+                    {isUpiPreferred && <span className="ml-1 text-emerald-600">· preferred</span>}
+                  </span>
                   <span className="font-medium text-gray-900">{payment.upiId}</span>
                 </div>
               ) : (
                 <p className="text-xs text-amber-600">UPI details not available</p>
               )}
             </>
+          )}
+          {!hasBank && !hasUpi && (
+            <p className="text-xs text-amber-600">No bank or UPI details on file</p>
           )}
           <div className="flex justify-between text-xs">
             <span className="text-gray-500">Created</span>
