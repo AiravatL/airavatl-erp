@@ -196,8 +196,8 @@ const HEALTH_CARDS: { key: keyof Omit<OperationsHealth, "asOf">; config: HealthC
     key: "partnersPendingOnboarding",
     config: {
       label: "Partners pending onboarding",
-      description: "KYC verified but RazorpayX not yet linked. Click Retry on their verification page.",
-      href: "/verification",
+      description: "KYC verified but RazorpayX not yet linked. Click to view list and retry onboarding.",
+      href: "/verification/pending-payout-onboarding",
       severity: (n) => (n === 0 ? "ok" : "warn"),
     },
   },

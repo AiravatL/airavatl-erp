@@ -108,6 +108,138 @@ export async function revokeVerification(
   });
 }
 
+// ------------------------------------------------------------------
+// RazorpayX payout onboarding (status + retry)
+// ------------------------------------------------------------------
+
+export type PayoutOnboardingStatus = "active" | "pending_razorpayx" | "missing";
+
+export interface PartnerPayoutStatus {
+  hasSettings: boolean;
+  status: PayoutOnboardingStatus;
+  driverType?: string | null;
+  payoutMethod?: string | null;
+  bankAccountHolderName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountNumberLast4?: string | null;
+  bankIfscCode?: string | null;
+  bankName?: string | null;
+  upiVpa?: string | null;
+  upiVerified?: boolean | null;
+  razorpayxContactId?: string | null;
+  razorpayxFundAccountId?: string | null;
+  isValidated?: boolean | null;
+  validationStatus?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PendingPayoutOnboardingItem {
+  userId: string;
+  fullName: string;
+  phone: string;
+  userType: string;
+  city: string | null;
+  state: string | null;
+  driverType: string | null;
+  payoutMethod: string | null;
+  bankAccountHolderName: string | null;
+  bankAccountNumberLast4: string | null;
+  bankIfscCode: string | null;
+  bankName: string | null;
+  upiVpa: string | null;
+  upiVerified: boolean | null;
+  razorpayxContactId: string | null;
+  razorpayxFundAccountId: string | null;
+  isValidated: boolean | null;
+  validationStatus: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getPartnerPayoutStatus(
+  userId: string,
+  opts: { reveal?: boolean } = {},
+): Promise<PartnerPayoutStatus> {
+  const qs = opts.reveal ? "?reveal=1" : "";
+  return apiRequest<PartnerPayoutStatus>(
+    `/api/verification/${userId}/payout-status${qs}`,
+    { method: "GET", cache: "no-store" },
+  );
+}
+
+export async function listPendingPayoutOnboarding(): Promise<{
+  items: PendingPayoutOnboardingItem[];
+  total: number;
+}> {
+  return apiRequest(`/api/verification/pending-payout-onboarding`, {
+    method: "GET",
+    cache: "no-store",
+  });
+}
+
+export interface RetryPayoutOnboardingResult {
+  payoutOnboarding: {
+    status: "active" | "pending_razorpayx";
+    razorpayxContactId?: string;
+    razorpayxFundAccountId?: string;
+    alreadyOnboarded?: boolean;
+    error?: { code?: string; message: string };
+  };
+}
+
+export async function retryPayoutOnboarding(
+  userId: string,
+): Promise<RetryPayoutOnboardingResult> {
+  return apiRequest<RetryPayoutOnboardingResult>(
+    `/api/verification/${userId}/retry-payout-onboarding`,
+    { method: "POST" },
+  );
+}
+
+export interface UpdatePayoutDetailsInput {
+  payoutMethod: "bank_account" | "upi";
+  bankAccountHolderName?: string | null;
+  bankAccountNumber?: string | null;
+  bankIfscCode?: string | null;
+  bankName?: string | null;
+  upiVpa?: string | null;
+}
+
+export async function updatePayoutDetails(
+  userId: string,
+  input: UpdatePayoutDetailsInput,
+): Promise<{ userId: string }> {
+  return apiRequest<{ userId: string }>(
+    `/api/verification/${userId}/payout-details`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export interface UpdatePartnerProfileInput {
+  fullName?: string;
+  city?: string | null;
+  state?: string | null;
+}
+
+export async function updatePartnerProfile(
+  userId: string,
+  input: UpdatePartnerProfileInput,
+): Promise<{ userId: string }> {
+  return apiRequest<{ userId: string }>(
+    `/api/verification/${userId}/profile`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
 export async function createPartner(
   input: CreatePartnerInput,
 ): Promise<{ userId: string }> {

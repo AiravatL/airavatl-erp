@@ -23,6 +23,8 @@ import {
   submitVerification,
   revokeVerification,
   getTransporterFleet,
+  getPartnerPayoutStatus,
+  retryPayoutOnboarding,
   type TransporterFleetVehicle,
   type TransporterFleetEmployeeDriver,
 } from "@/lib/api/verification";
@@ -33,7 +35,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { DocumentUpload } from "@/app/(app)/verification/document-upload";
 import {
   ArrowLeft, Phone, MapPin, Calendar, ShieldCheck, ShieldOff,
-  Loader2, AlertTriangle, CheckCircle, Truck, Users,
+  Loader2, AlertTriangle, CheckCircle, Truck, Users, Wallet, RefreshCw,
 } from "lucide-react";
 
 const TYPE_BADGE: Record<string, string> = {
@@ -105,10 +107,27 @@ export default function VerificationDetailPage() {
     enabled: !!userId && isTransporterQuery,
   });
 
+  const payoutStatusQuery = useQuery({
+    queryKey: queryKeys.partnerPayoutStatus(userId),
+    queryFn: () => getPartnerPayoutStatus(userId),
+    enabled: !!userId && detailQuery.data?.user.isVerified === true,
+  });
+
+  const retryPayoutMutation = useMutation({
+    mutationFn: () => retryPayoutOnboarding(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.partnerPayoutStatus(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pendingPayoutOnboarding });
+      queryClient.invalidateQueries({ queryKey: queryKeys.operationsHealth });
+    },
+  });
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.verificationDetail(userId) });
     queryClient.invalidateQueries({ queryKey: queryKeys.transporterFleet(userId) });
     queryClient.invalidateQueries({ queryKey: ["verification", "pending"] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.partnerPayoutStatus(userId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.pendingPayoutOnboarding });
   };
 
   const submitMutation = useMutation({
@@ -301,6 +320,21 @@ export default function VerificationDetailPage() {
             {submitMutation.error instanceof Error ? submitMutation.error.message : "Verification failed"}
           </p>
         </div>
+      )}
+
+      {/* Payout onboarding (only for verified partners) */}
+      {isVerified && (
+        <PayoutOnboardingCard
+          isLoading={payoutStatusQuery.isLoading}
+          status={payoutStatusQuery.data}
+          retryPending={retryPayoutMutation.isPending}
+          retryError={
+            retryPayoutMutation.error instanceof Error
+              ? retryPayoutMutation.error.message
+              : null
+          }
+          onRetry={() => retryPayoutMutation.mutate()}
+        />
       )}
 
       {/* Two-column layout */}
@@ -785,6 +819,135 @@ export default function VerificationDetailPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function PayoutOnboardingCard({
+  isLoading,
+  status,
+  retryPending,
+  retryError,
+  onRetry,
+}: {
+  isLoading: boolean;
+  status: import("@/lib/api/verification").PartnerPayoutStatus | undefined;
+  retryPending: boolean;
+  retryError: string | null;
+  onRetry: () => void;
+}) {
+  if (isLoading && !status) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-xs text-gray-500">Loading payout status…</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (!status) return null;
+
+  const isActive = status.status === "active";
+  const isMissing = status.status === "missing";
+  const tone = isActive
+    ? "border-emerald-200 bg-emerald-50/40"
+    : "border-amber-300 bg-amber-50/60";
+  const Icon = isActive ? CheckCircle : AlertTriangle;
+  const iconTone = isActive ? "text-emerald-600" : "text-amber-600";
+
+  return (
+    <Card className={`border ${tone}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80">
+              <Wallet className="h-4 w-4 text-gray-700" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-900">Payout Onboarding</h2>
+              <Badge variant="outline" className="border-0 text-[10px] bg-white text-gray-700">
+                <Icon className={`h-3 w-3 mr-1 ${iconTone}`} />
+                {isActive ? "Active" : isMissing ? "Missing" : "Pending RazorpayX"}
+              </Badge>
+            </div>
+            {isActive ? (
+              <p className="text-xs text-gray-600">
+                RazorpayX fund account is linked. Driver can receive payouts.
+              </p>
+            ) : isMissing ? (
+              <p className="text-xs text-gray-600">
+                No payout settings on record. Re-run verification to add bank/UPI details.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-600">
+                KYC is verified but RazorpayX onboarding hasn&apos;t completed. Click Retry to
+                re-run the onboarding step using the bank/UPI details on file.
+              </p>
+            )}
+
+            {/* On-file payout details */}
+            {!isMissing && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs pt-1">
+                {status.bankAccountHolderName && (
+                  <div>
+                    <span className="text-gray-500">Account holder: </span>
+                    <span className="text-gray-900">{status.bankAccountHolderName}</span>
+                  </div>
+                )}
+                {status.bankAccountNumberLast4 && (
+                  <div>
+                    <span className="text-gray-500">Account: </span>
+                    <span className="text-gray-900">····{status.bankAccountNumberLast4}</span>
+                  </div>
+                )}
+                {status.bankIfscCode && (
+                  <div>
+                    <span className="text-gray-500">IFSC: </span>
+                    <span className="text-gray-900">{status.bankIfscCode}</span>
+                  </div>
+                )}
+                {status.upiVpa && (
+                  <div>
+                    <span className="text-gray-500">UPI: </span>
+                    <span className="text-gray-900">{status.upiVpa}</span>
+                  </div>
+                )}
+                {status.razorpayxContactId && (
+                  <div className="sm:col-span-2 text-[11px] text-gray-500">
+                    RazorpayX contact: {status.razorpayxContactId}
+                    {status.razorpayxFundAccountId
+                      ? ` · fund account: ${status.razorpayxFundAccountId}`
+                      : ""}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {retryError && (
+              <p className="text-xs text-red-600 pt-1">{retryError}</p>
+            )}
+          </div>
+
+          {!isActive && !isMissing && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs bg-white"
+              onClick={onRetry}
+              disabled={retryPending}
+            >
+              {retryPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+              )}
+              {retryPending ? "Retrying…" : "Retry Onboarding"}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

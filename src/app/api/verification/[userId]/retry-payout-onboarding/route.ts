@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import {
-  createDriverFundAccount,
-  RazorpayXOnboardingError,
-  type DriverType,
-  type PayoutMethod,
-} from "@/lib/payouts/razorpayx";
 import { requireVerificationActor } from "@/app/api/verification/_shared";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+// Retry RazorpayX onboarding for a verified partner. We delegate the actual
+// RazorpayX API calls + DPS finalize to the `admin-onboard-driver-payout`
+// edge function so the secrets (RAZORPAYX_KEY_ID/SECRET) only live in
+// Supabase, not in the ERP server's env.
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ userId: string }> },
@@ -21,134 +20,124 @@ export async function POST(
     return NextResponse.json({ ok: false, message: "userId is required" }, { status: 400 });
   }
 
-  // Pull the existing payout-settings row plus the partner's name/phone
-  // so we can call RazorpayX. We don't accept any body — this endpoint
-  // is just a re-run of the onboarding step against whatever the
-  // verification RPC last wrote.
-  const { data: settings, error: settingsError } = await actorResult.supabase
-    .from("driver_payout_settings")
-    .select(
-      "user_id, driver_type, payout_method, bank_account_number, bank_ifsc_code, bank_account_holder_name, upi_vpa, is_validated, validation_status, razorpayx_contact_id, razorpayx_fund_account_id",
-    )
-    .eq("user_id", userId)
-    .single();
-
-  if (settingsError || !settings) {
+  const adminClient = getSupabaseAdminClient();
+  if (!adminClient) {
     return NextResponse.json(
-      {
-        ok: false,
-        message: "No payout settings found for this partner. Run verification first.",
-      },
-      { status: 404 },
+      { ok: false, message: "Service role client not configured" },
+      { status: 500 },
     );
   }
 
-  // Idempotent: already onboarded.
+  // Fast idempotency check: if already onboarded, skip the edge function call.
+  type SettingsRow = {
+    is_validated: boolean | null;
+    razorpayx_contact_id: string | null;
+    razorpayx_fund_account_id: string | null;
+  };
+  const { data: existingData } = await adminClient
+    .from("driver_payout_settings")
+    .select("is_validated, razorpayx_contact_id, razorpayx_fund_account_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const existing = existingData as unknown as SettingsRow | null;
+
   if (
-    settings.is_validated &&
-    settings.razorpayx_contact_id &&
-    settings.razorpayx_fund_account_id
+    existing?.is_validated &&
+    existing.razorpayx_contact_id &&
+    existing.razorpayx_fund_account_id
   ) {
     return NextResponse.json({
       ok: true,
       data: {
         payoutOnboarding: {
           status: "active",
-          razorpayxContactId: settings.razorpayx_contact_id,
-          razorpayxFundAccountId: settings.razorpayx_fund_account_id,
+          razorpayxContactId: existing.razorpayx_contact_id,
+          razorpayxFundAccountId: existing.razorpayx_fund_account_id,
           alreadyOnboarded: true,
         },
       },
     });
   }
 
-  const { data: profile, error: profileError } = await actorResult.supabase
-    .from("user_profiles")
-    .select("full_name, phone")
-    .eq("id", userId)
-    .single();
+  // Invoke the edge function — it has the RazorpayX secrets, calls the
+  // RazorpayX /contacts + /fund_accounts APIs, and finalizes via the
+  // erp.verification_finalize_payout_v1 RPC.
+  type EdgeResponse = {
+    ok: boolean;
+    error?: string;
+    razorpayxContactId?: string;
+    razorpayxFundAccountId?: string;
+    alreadyOnboarded?: boolean;
+    note?: string;
+  };
+  const { data, error } = await adminClient.functions.invoke<EdgeResponse>(
+    "admin-onboard-driver-payout",
+    { body: { userId, actorUserId: actorResult.actor.id } },
+  );
 
-  if (profileError || !profile?.full_name || !profile?.phone) {
+  if (error) {
+    // Supabase wraps non-2xx responses as FunctionsHttpError. The actual error
+    // body is on error.context (a Response). Extract it for a useful message.
+    let bodyMessage: string | null = null;
+    type EdgeErrorWithContext = { context?: { text?: () => Promise<string> } };
+    const ctx = (error as unknown as EdgeErrorWithContext).context;
+    if (ctx?.text) {
+      try {
+        const raw = await ctx.text();
+        try {
+          const parsed = JSON.parse(raw) as Partial<EdgeResponse>;
+          bodyMessage = parsed.error ?? raw;
+        } catch {
+          bodyMessage = raw;
+        }
+      } catch {
+        // ignore — fall back to error.message
+      }
+    }
+    const message = bodyMessage ?? error.message ?? "Edge function call failed";
     return NextResponse.json(
       {
         ok: false,
-        message: profileError?.message ?? "Could not load partner profile",
+        message,
+        data: {
+          payoutOnboarding: {
+            status: "pending_razorpayx",
+            error: { code: "EDGE_FUNCTION_FAILED", message },
+          },
+        },
       },
-      { status: 400 },
+      { status: 502 },
     );
   }
 
-  try {
-    const { contactId, fundAccountId } = await createDriverFundAccount({
-      userId,
-      fullName: profile.full_name,
-      phone: profile.phone,
-      userType: settings.driver_type as DriverType,
-      payoutMethod: settings.payout_method as PayoutMethod,
-      bankAccountNumber: settings.bank_account_number,
-      bankIfscCode: settings.bank_ifsc_code,
-      bankAccountHolderName: settings.bank_account_holder_name,
-      upiVpa: settings.upi_vpa,
-    });
-
-    const { error: finalizeError } = await actorResult.supabase.rpc(
-      "verification_finalize_payout_v1",
-      {
-        p_actor_user_id: actorResult.actor.id,
-        p_user_id: userId,
-        p_razorpayx_contact_id: contactId,
-        p_razorpayx_fund_account_id: fundAccountId,
-      } as never,
-    );
-
-    if (finalizeError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: finalizeError.message ?? "Failed to finalize payout settings",
-          data: {
-            payoutOnboarding: {
-              status: "pending_razorpayx",
-              razorpayxContactId: contactId,
-              razorpayxFundAccountId: fundAccountId,
-              error: { code: "FINALIZE_RPC_FAILED", message: finalizeError.message },
-            },
-          },
-        },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      data: {
-        payoutOnboarding: {
-          status: "active",
-          razorpayxContactId: contactId,
-          razorpayxFundAccountId: fundAccountId,
-        },
-      },
-    });
-  } catch (err) {
-    if (err instanceof RazorpayXOnboardingError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: err.message,
-          data: {
-            payoutOnboarding: {
-              status: "pending_razorpayx",
-              error: { code: err.code, message: err.message },
-            },
-          },
-        },
-        { status: err.status >= 400 && err.status < 600 ? err.status : 502 },
-      );
-    }
-    const msg = err instanceof Error ? err.message : "Unknown error";
+  if (!data?.ok) {
+    const message = data?.error ?? "RazorpayX onboarding failed";
     return NextResponse.json(
-      { ok: false, message: msg },
-      { status: 500 },
+      {
+        ok: false,
+        message,
+        data: {
+          payoutOnboarding: {
+            status: "pending_razorpayx",
+            razorpayxContactId: data?.razorpayxContactId,
+            razorpayxFundAccountId: data?.razorpayxFundAccountId,
+            error: { code: "RAZORPAYX_FAILED", message },
+          },
+        },
+      },
+      { status: 502 },
     );
   }
+
+  return NextResponse.json({
+    ok: true,
+    data: {
+      payoutOnboarding: {
+        status: "active",
+        razorpayxContactId: data.razorpayxContactId,
+        razorpayxFundAccountId: data.razorpayxFundAccountId,
+        alreadyOnboarded: data.alreadyOnboarded,
+      },
+    },
+  });
 }
