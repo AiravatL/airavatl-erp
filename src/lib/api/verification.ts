@@ -220,22 +220,46 @@ export async function updatePayoutDetails(
   );
 }
 
+export type DriverUserType = "individual_driver" | "transporter" | "employee_driver";
+
 export interface UpdatePartnerProfileInput {
   fullName?: string;
   city?: string | null;
   state?: string | null;
+  userType?: DriverUserType;
 }
 
 export async function updatePartnerProfile(
   userId: string,
   input: UpdatePartnerProfileInput,
-): Promise<{ userId: string }> {
-  return apiRequest<{ userId: string }>(
+): Promise<{ userId: string; userType?: DriverUserType }> {
+  return apiRequest<{ userId: string; userType?: DriverUserType }>(
     `/api/verification/${userId}/profile`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function deletePartner(userId: string): Promise<{ userId: string; warning?: string }> {
+  return apiRequest<{ userId: string; warning?: string }>(
+    `/api/verification/${userId}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function updateVehicleMasterType(
+  vehicleId: string,
+  vehicleMasterTypeId: string,
+): Promise<{ vehicleId: string; vehicleMasterTypeId: string }> {
+  return apiRequest<{ vehicleId: string; vehicleMasterTypeId: string }>(
+    `/api/verification/vehicle/${vehicleId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vehicleMasterTypeId }),
     },
   );
 }

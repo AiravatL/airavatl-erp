@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isMissingRpcError } from "@/lib/supabase/rpc";
 import { mapRpcError, requireVerificationActor } from "@/app/api/verification/_shared";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 interface UserRow {
   id: string;
@@ -205,4 +206,135 @@ export async function GET(
       },
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/verification/[userId]
+// Hard-delete an unverified partner so the phone is freed for a fresh signup.
+// super_admin / admin only. Refuses if the user has any auction/trip activity.
+// ---------------------------------------------------------------------------
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ userId: string }> },
+) {
+  const actorResult = await requireVerificationActor(["super_admin", "admin"]);
+  if ("error" in actorResult) return actorResult.error;
+
+  const { userId } = await params;
+  if (!userId) {
+    return NextResponse.json({ ok: false, message: "userId is required" }, { status: 400 });
+  }
+  if (userId === actorResult.actor.id) {
+    return NextResponse.json(
+      { ok: false, message: "You cannot delete your own account from here." },
+      { status: 400 },
+    );
+  }
+
+  const adminClient = getSupabaseAdminClient();
+  if (!adminClient) {
+    return NextResponse.json(
+      { ok: false, message: "Service role client not configured" },
+      { status: 500 },
+    );
+  }
+
+  const { data: profileRaw } = await adminClient
+    .from("user_profiles")
+    .select("id, full_name, phone, user_type, is_verified")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const profile = profileRaw as
+    | { id: string; full_name: string; phone: string | null; user_type: string; is_verified: boolean }
+    | null;
+
+  if (!profile) {
+    return NextResponse.json({ ok: false, message: "Partner not found" }, { status: 404 });
+  }
+  if (profile.is_verified) {
+    return NextResponse.json(
+      { ok: false, message: "Cannot delete a verified partner. Revoke verification first." },
+      { status: 400 },
+    );
+  }
+
+  // Refuse if any operational activity exists.
+  const [bids, trips, payments, deliveries] = await Promise.all([
+    adminClient.from("auction_bids").select("id", { count: "exact", head: true }).eq("bidder_id", userId),
+    adminClient.from("trips").select("id", { count: "exact", head: true })
+      .or(`driver_id.eq.${userId},assigned_driver_id.eq.${userId},consigner_id.eq.${userId}`),
+    adminClient.from("trip_driver_payments").select("id", { count: "exact", head: true }).eq("driver_user_id", userId),
+    adminClient.from("delivery_requests").select("id", { count: "exact", head: true }).eq("consigner_id", userId),
+  ]);
+  if (
+    (bids.count ?? 0) > 0 ||
+    (trips.count ?? 0) > 0 ||
+    (payments.count ?? 0) > 0 ||
+    (deliveries.count ?? 0) > 0
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "Cannot delete: partner has bids, trips, deliveries, or payments on record.",
+      },
+      { status: 400 },
+    );
+  }
+
+  // Best-effort manual cleanup for tables without an FK to user_profiles.
+  // user_profiles cascade covers transporters / individual_drivers / employee_drivers /
+  // consigners / app_notifications / push_notification_queue.
+  await adminClient.from("driver_payout_settings").delete().eq("user_id", userId);
+  await adminClient.from("driver_locations").delete().eq("driver_id", userId);
+  await adminClient.from("driver_availability").delete().eq("driver_id", userId);
+  if (profile.phone) {
+    await adminClient.from("user_blocklist").delete().or(`user_id.eq.${userId},phone_number.eq.${profile.phone}`);
+  } else {
+    await adminClient.from("user_blocklist").delete().eq("user_id", userId);
+  }
+
+  // Drop the profile row (cascades to type tables + notifications).
+  const { error: profileDelErr } = await adminClient
+    .from("user_profiles")
+    .delete()
+    .eq("id", userId);
+  if (profileDelErr) {
+    return NextResponse.json(
+      { ok: false, message: profileDelErr.message ?? "Failed to delete profile" },
+      { status: 500 },
+    );
+  }
+
+  // Delete the auth user so the phone is freed for a fresh signup.
+  const { error: authDelErr } = await adminClient.auth.admin.deleteUser(userId);
+  if (authDelErr) {
+    // Profile is already gone — surface the auth error but don't 500 the call.
+    return NextResponse.json(
+      {
+        ok: true,
+        data: {
+          userId,
+          warning: `Profile deleted but auth user removal failed: ${authDelErr.message}. Run cleanup manually.`,
+        },
+      },
+      { status: 200 },
+    );
+  }
+
+  // Best-effort audit
+  try {
+    await adminClient.rpc("audit_log_insert", {
+      p_action: "partner_deleted",
+      p_entity_schema: "public",
+      p_entity_table: "user_profiles",
+      p_entity_id: userId,
+      p_old_values: profile,
+      p_new_values: null,
+    } as never);
+  } catch {
+    // ignore
+  }
+
+  return NextResponse.json({ ok: true, data: { userId } });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -25,8 +32,11 @@ import {
   getTransporterFleet,
   getPartnerPayoutStatus,
   retryPayoutOnboarding,
+  updatePartnerProfile,
+  deletePartner,
   type TransporterFleetVehicle,
   type TransporterFleetEmployeeDriver,
+  type DriverUserType,
 } from "@/lib/api/verification";
 import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
 import { queryKeys } from "@/lib/query/keys";
@@ -36,6 +46,7 @@ import { DocumentUpload } from "@/app/(app)/verification/document-upload";
 import {
   ArrowLeft, Phone, MapPin, Calendar, ShieldCheck, ShieldOff,
   Loader2, AlertTriangle, CheckCircle, Truck, Users, Wallet, RefreshCw,
+  Pencil, Trash2,
 } from "lucide-react";
 
 const TYPE_BADGE: Record<string, string> = {
@@ -92,6 +103,10 @@ export default function VerificationDetailPage() {
   // Revoke dialog
   const [showRevoke, setShowRevoke] = useState(false);
   const [revokeReason, setRevokeReason] = useState("");
+
+  // Edit / Delete dialogs (admin only, unverified partners)
+  const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.verificationDetail(userId),
@@ -183,11 +198,35 @@ export default function VerificationDetailPage() {
     },
   });
 
+  const editProfileMutation = useMutation({
+    mutationFn: (input: {
+      fullName?: string;
+      city?: string | null;
+      state?: string | null;
+      userType?: DriverUserType;
+    }) => updatePartnerProfile(userId, input),
+    onSuccess: () => {
+      setShowEdit(false);
+      invalidateAll();
+    },
+  });
+
+  const deletePartnerMutation = useMutation({
+    mutationFn: () => deletePartner(userId),
+    onSuccess: () => {
+      setShowDelete(false);
+      queryClient.invalidateQueries({ queryKey: ["verification", "pending"] });
+      router.push("/verification");
+    },
+  });
+
   const detail = detailQuery.data;
   const isDriver = detail?.user.userType === "individual_driver";
   const isTransporter = detail?.user.userType === "transporter";
   const isVerified = detail?.user.isVerified;
-  const canRevoke = (user?.role === "super_admin" || user?.role === "admin") && isVerified;
+  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+  const canRevoke = isAdmin && isVerified;
+  const canManageUnverified = isAdmin && isVerified === false;
   const currentRegNumber = regNumber ?? detail?.vehicle?.registrationNumber ?? "";
   const currentVehicleMasterTypeId =
     vehicleMasterTypeId ?? detail?.vehicle?.vehicleMasterTypeId ?? "";
@@ -281,17 +320,41 @@ export default function VerificationDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Pending
         </Link>
-        {canRevoke && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs border-red-200 text-red-700 hover:bg-red-50"
-            onClick={() => setShowRevoke(true)}
-          >
-            <ShieldOff className="h-3.5 w-3.5 mr-1" />
-            Revoke Verification
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canManageUnverified && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => setShowEdit(true)}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit Info
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs border-red-200 text-red-700 hover:bg-red-50"
+                onClick={() => setShowDelete(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Delete Partner
+              </Button>
+            </>
+          )}
+          {canRevoke && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs border-red-200 text-red-700 hover:bg-red-50"
+              onClick={() => setShowRevoke(true)}
+            >
+              <ShieldOff className="h-3.5 w-3.5 mr-1" />
+              Revoke Verification
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Header */}
@@ -770,6 +833,69 @@ export default function VerificationDetailPage() {
         </div>
       )}
 
+      {/* Edit Info Dialog (admin, unverified) */}
+      <EditPartnerInfoDialog
+        open={showEdit}
+        onOpenChange={setShowEdit}
+        initial={{
+          fullName: detail.user.fullName,
+          city: detail.user.city,
+          state: detail.user.state,
+          userType: detail.user.userType as DriverUserType,
+        }}
+        isPending={editProfileMutation.isPending}
+        error={
+          editProfileMutation.error instanceof Error
+            ? editProfileMutation.error.message
+            : null
+        }
+        onSubmit={(input) => editProfileMutation.mutate(input)}
+      />
+
+      {/* Delete Partner Dialog (admin, unverified) */}
+      <Dialog
+        open={showDelete}
+        onOpenChange={(open) => {
+          if (!open) setShowDelete(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Partner</DialogTitle>
+            <DialogDescription className="flex items-start gap-2 pt-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <span>
+                This permanently removes <strong>{detail.user.fullName}</strong> and frees the
+                phone number for a fresh signup. This cannot be undone.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          {deletePartnerMutation.isError && (
+            <p className="text-sm text-red-600">
+              {deletePartnerMutation.error instanceof Error
+                ? deletePartnerMutation.error.message
+                : "Failed to delete"}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deletePartnerMutation.mutate()}
+              disabled={deletePartnerMutation.isPending}
+            >
+              {deletePartnerMutation.isPending && (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              )}
+              Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Revoke Dialog */}
       <Dialog open={showRevoke} onOpenChange={(open) => { if (!open) { setShowRevoke(false); setRevokeReason(""); } }}>
         <DialogContent className="sm:max-w-md">
@@ -948,6 +1074,141 @@ function PayoutOnboardingCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function EditPartnerInfoDialog({
+  open,
+  onOpenChange,
+  initial,
+  isPending,
+  error,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initial: {
+    fullName: string;
+    city: string | null;
+    state: string | null;
+    userType: DriverUserType;
+  };
+  isPending: boolean;
+  error: string | null;
+  onSubmit: (input: {
+    fullName?: string;
+    city?: string | null;
+    state?: string | null;
+    userType?: DriverUserType;
+  }) => void;
+}) {
+  const [fullName, setFullName] = useState(initial.fullName);
+  const [city, setCity] = useState(initial.city ?? "");
+  const [state, setState] = useState(initial.state ?? "");
+  const [userType, setUserType] = useState<DriverUserType>(initial.userType);
+
+  // Re-prime when reopened with fresh data
+  useEffect(() => {
+    if (open) {
+      setFullName(initial.fullName);
+      setCity(initial.city ?? "");
+      setState(initial.state ?? "");
+      setUserType(initial.userType);
+    }
+  }, [open, initial.fullName, initial.city, initial.state, initial.userType]);
+
+  const trimmedName = fullName.trim();
+  const dirty =
+    trimmedName !== initial.fullName ||
+    (city.trim() || null) !== (initial.city ?? null) ||
+    (state.trim() || null) !== (initial.state ?? null) ||
+    userType !== initial.userType;
+  const canSave = !!trimmedName && trimmedName.length <= 100 && dirty && !isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Partner Info</DialogTitle>
+          <DialogDescription>
+            Phone is not editable (it&apos;s the auth identifier). Changing role is only
+            allowed before verification and is blocked if the partner has bids, trips, or payments.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Full Name</Label>
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value.slice(0, 100))}
+              maxLength={100}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Role</Label>
+            <Select value={userType} onValueChange={(v) => setUserType(v as DriverUserType)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="individual_driver">Individual Driver</SelectItem>
+                <SelectItem value="transporter">Transporter</SelectItem>
+                <SelectItem value="employee_driver">Employee Driver</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">City</Label>
+              <Input
+                value={city}
+                onChange={(e) => setCity(e.target.value.slice(0, 100))}
+                maxLength={100}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">State</Label>
+              <Input
+                value={state}
+                onChange={(e) => setState(e.target.value.slice(0, 100))}
+                maxLength={100}
+                className="h-9 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={!canSave}
+            onClick={() => {
+              const payload: {
+                fullName?: string;
+                city?: string | null;
+                state?: string | null;
+                userType?: DriverUserType;
+              } = {};
+              if (trimmedName !== initial.fullName) payload.fullName = trimmedName;
+              const cityVal = city.trim() || null;
+              if (cityVal !== (initial.city ?? null)) payload.city = cityVal;
+              const stateVal = state.trim() || null;
+              if (stateVal !== (initial.state ?? null)) payload.state = stateVal;
+              if (userType !== initial.userType) payload.userType = userType;
+              onSubmit(payload);
+            }}
+          >
+            {isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

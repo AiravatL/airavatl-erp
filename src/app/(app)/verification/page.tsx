@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -14,9 +15,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/lib/auth/auth-context";
-import { listPendingVerifications } from "@/lib/api/verification";
+import {
+  listPendingVerifications,
+  updatePartnerProfile,
+  deletePartner,
+  type DriverUserType,
+} from "@/lib/api/verification";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDate } from "@/lib/formatters";
 import type { PendingVerificationItem, PendingVerificationKind } from "@/lib/types";
@@ -28,6 +48,11 @@ import {
   Building2,
   Users,
   Truck,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 const KIND_BADGE: Record<PendingVerificationKind, string> = {
@@ -94,8 +119,49 @@ function subtitleFor(item: PendingVerificationItem): string {
 
 export default function VerificationPendingPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<string>("all");
+  const [editTarget, setEditTarget] = useState<{
+    id: string;
+    title: string;
+    kind: "individual_driver" | "transporter";
+    city: string | null;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+
+  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+
+  const editMutation = useMutation({
+    mutationFn: (input: {
+      userId: string;
+      fullName?: string;
+      userType?: DriverUserType;
+      city?: string | null;
+      state?: string | null;
+    }) =>
+      updatePartnerProfile(input.userId, {
+        fullName: input.fullName,
+        userType: input.userType,
+        city: input.city,
+        state: input.state,
+      }),
+    onSuccess: () => {
+      setEditTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["verification", "pending"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => deletePartner(userId),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["verification", "pending"] });
+    },
+  });
 
   const pendingQuery = useQuery({
     queryKey: queryKeys.verificationPending({
@@ -285,44 +351,93 @@ export default function VerificationPendingPage() {
                             Details
                           </th>
                           <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-[120px]">
-                            City
-                          </th>
-                          <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-[120px]">
                             Added
                           </th>
+                          {isAdmin && (
+                            <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 w-[60px]">
+                              {""}
+                            </th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {items.map((p) => (
-                          <tr
-                            key={`${p.kind}-${p.id}`}
-                            className="hover:bg-gray-50/50 transition-colors"
-                          >
-                            <td className="px-4 py-3">
-                              <Link
-                                href={hrefFor(p)}
-                                className="font-medium text-blue-600 hover:underline"
-                              >
-                                {p.title}
-                              </Link>
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge
-                                variant="outline"
-                                className={`border-0 text-[10px] ${KIND_BADGE[p.kind]}`}
-                              >
-                                {KIND_LABEL[p.kind]}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3 text-gray-600 truncate max-w-[260px]">
-                              {subtitleFor(p) || "—"}
-                            </td>
-                            <td className="px-4 py-3 text-gray-600">{p.city ?? "—"}</td>
-                            <td className="px-4 py-3 text-xs text-gray-500">
-                              {timeAgo(p.createdAt)}
-                            </td>
-                          </tr>
-                        ))}
+                        {items.map((p) => {
+                          const isPartnerRow =
+                            p.kind === "individual_driver" || p.kind === "transporter";
+                          return (
+                            <tr
+                              key={`${p.kind}-${p.id}`}
+                              className="hover:bg-gray-50/50 transition-colors"
+                            >
+                              <td className="px-4 py-3">
+                                <Link
+                                  href={hrefFor(p)}
+                                  className="font-medium text-blue-600 hover:underline"
+                                >
+                                  {p.title}
+                                </Link>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge
+                                  variant="outline"
+                                  className={`border-0 text-[10px] ${KIND_BADGE[p.kind]}`}
+                                >
+                                  {KIND_LABEL[p.kind]}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 truncate max-w-[260px]">
+                                {subtitleFor(p) || "—"}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-gray-500">
+                                {timeAgo(p.createdAt)}
+                              </td>
+                              {isAdmin && (
+                                <td className="px-4 py-3 text-right">
+                                  {isPartnerRow ? (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 w-7 p-0"
+                                          aria-label="Row actions"
+                                        >
+                                          <MoreVertical className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-36">
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            setEditTarget({
+                                              id: p.id,
+                                              title: p.title,
+                                              kind: p.kind as
+                                                | "individual_driver"
+                                                | "transporter",
+                                              city: p.city ?? null,
+                                            })
+                                          }
+                                        >
+                                          <Pencil className="h-3.5 w-3.5 mr-2" />
+                                          Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                                          onClick={() =>
+                                            setDeleteTarget({ id: p.id, title: p.title })
+                                          }
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  ) : null}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </CardContent>
@@ -361,6 +476,177 @@ export default function VerificationPendingPage() {
           )}
         </>
       )}
+
+      {/* Quick Edit dialog (row-level) */}
+      <QuickEditDialog
+        target={editTarget}
+        isPending={editMutation.isPending}
+        error={editMutation.error instanceof Error ? editMutation.error.message : null}
+        onClose={() => setEditTarget(null)}
+        onSubmit={(input) =>
+          editTarget && editMutation.mutate({ userId: editTarget.id, ...input })
+        }
+      />
+
+      {/* Delete confirm dialog */}
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Partner</DialogTitle>
+            <DialogDescription className="flex items-start gap-2 pt-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <span>
+                Permanently remove <strong>{deleteTarget?.title}</strong>? Their phone will be
+                freed for a fresh signup. This cannot be undone.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          {deleteMutation.isError && (
+            <p className="text-sm text-red-600">
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : "Failed to delete"}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              )}
+              Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function QuickEditDialog({
+  target,
+  isPending,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  target: {
+    id: string;
+    title: string;
+    kind: "individual_driver" | "transporter";
+    city: string | null;
+  } | null;
+  isPending: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSubmit: (input: {
+    fullName?: string;
+    userType?: DriverUserType;
+    city?: string | null;
+    state?: string | null;
+  }) => void;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [userType, setUserType] = useState<DriverUserType>("individual_driver");
+  const [city, setCity] = useState("");
+
+  useEffect(() => {
+    if (target) {
+      setFullName(target.title);
+      setUserType(target.kind);
+      setCity(target.city ?? "");
+    }
+  }, [target]);
+
+  if (!target) return null;
+
+  const trimmed = fullName.trim();
+  const dirty =
+    trimmed !== target.title ||
+    userType !== target.kind ||
+    (city.trim() || null) !== (target.city ?? null);
+  const canSave = !!trimmed && dirty && !isPending;
+
+  return (
+    <Dialog open={!!target} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Partner</DialogTitle>
+          <DialogDescription>
+            Phone is not editable. Role swap requires no bids/trips/payments on file.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Full Name</Label>
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value.slice(0, 100))}
+              maxLength={100}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Role</Label>
+            <Select value={userType} onValueChange={(v) => setUserType(v as DriverUserType)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="individual_driver">Individual Driver</SelectItem>
+                <SelectItem value="transporter">Transporter</SelectItem>
+                <SelectItem value="employee_driver">Employee Driver</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">City</Label>
+            <Input
+              value={city}
+              onChange={(e) => setCity(e.target.value.slice(0, 100))}
+              maxLength={100}
+              className="h-9 text-sm"
+            />
+          </div>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={!canSave}
+            onClick={() => {
+              const payload: {
+                fullName?: string;
+                userType?: DriverUserType;
+                city?: string | null;
+              } = {};
+              if (trimmed !== target.title) payload.fullName = trimmed;
+              if (userType !== target.kind) payload.userType = userType;
+              const cityVal = city.trim() || null;
+              if (cityVal !== (target.city ?? null)) payload.city = cityVal;
+              onSubmit(payload);
+            }}
+          >
+            {isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

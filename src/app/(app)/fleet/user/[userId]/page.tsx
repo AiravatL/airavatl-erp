@@ -24,11 +24,13 @@ import {
   retryPayoutOnboarding,
   updatePayoutDetails,
   updatePartnerProfile,
+  updateVehicleMasterType,
   type TransporterFleetVehicle,
   type TransporterFleetEmployeeDriver,
   type PartnerPayoutStatus,
 } from "@/lib/api/verification";
 import type { VerificationDetails } from "@/lib/types";
+import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDate } from "@/lib/formatters";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -885,30 +887,52 @@ function EditUserInfoDialog({
   initial: VerificationDetails | undefined;
   onSaved: () => void;
 }) {
-  const [fullName, setFullName] = useState(initial?.user.fullName ?? "");
-  const [city, setCity] = useState(initial?.user.city ?? "");
-  const [state, setState] = useState(initial?.user.state ?? "");
+  const queryClient = useQueryClient();
+  const initialName = initial?.user.fullName ?? "";
+  const initialVehicleId = initial?.vehicle?.id ?? null;
+  const initialMasterTypeId = initial?.vehicle?.vehicleMasterTypeId ?? null;
+  const isIndividualDriver = initial?.user.userType === "individual_driver";
+
+  const [fullName, setFullName] = useState(initialName);
+  const [vehicleMasterTypeId, setVehicleMasterTypeId] = useState<string | null>(
+    initialMasterTypeId,
+  );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setFullName(initial?.user.fullName ?? "");
-      setCity(initial?.user.city ?? "");
-      setState(initial?.user.state ?? "");
+      setFullName(initialName);
+      setVehicleMasterTypeId(initialMasterTypeId);
+      setError(null);
     }
-  }, [open, initial]);
+  }, [open, initialName, initialMasterTypeId]);
 
-  const valid = fullName.trim().length > 0 && fullName.trim().length <= 100;
+  const trimmedName = fullName.trim();
+  const nameChanged = trimmedName !== initialName;
+  const vehicleTypeChanged =
+    isIndividualDriver &&
+    !!initialVehicleId &&
+    !!vehicleMasterTypeId &&
+    vehicleMasterTypeId !== initialMasterTypeId;
+  const dirty = nameChanged || vehicleTypeChanged;
+  const valid = trimmedName.length > 0 && trimmedName.length <= 100;
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      updatePartnerProfile(userId, {
-        fullName: fullName.trim(),
-        city: city.trim() || null,
-        state: state.trim() || null,
-      }),
+    mutationFn: async () => {
+      if (nameChanged) {
+        await updatePartnerProfile(userId, { fullName: trimmedName });
+      }
+      if (vehicleTypeChanged && initialVehicleId && vehicleMasterTypeId) {
+        await updateVehicleMasterType(initialVehicleId, vehicleMasterTypeId);
+      }
+    },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.verificationDetail(userId) });
       onSaved();
       onOpenChange(false);
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : "Failed to save");
     },
   });
 
@@ -918,7 +942,8 @@ function EditUserInfoDialog({
         <DialogHeader>
           <DialogTitle>Edit Partner Info</DialogTitle>
           <DialogDescription className="text-xs">
-            Update name and location. Phone is the auth identifier and cannot be changed here.
+            Update name{isIndividualDriver && initialVehicleId ? " and vehicle type" : ""}.
+            Phone is the auth identifier and cannot be changed here.
           </DialogDescription>
         </DialogHeader>
 
@@ -944,30 +969,25 @@ function EditUserInfoDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {isIndividualDriver && initialVehicleId && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">City</Label>
-              <Input
-                value={city}
-                onChange={(e) => setCity(e.target.value.slice(0, 100))}
-                className="h-9 text-sm"
-                maxLength={100}
+              <Label className="text-xs font-medium">Vehicle Type</Label>
+              <VehicleTypePicker
+                value={vehicleMasterTypeId ?? ""}
+                onChange={(v) => setVehicleMasterTypeId(v || null)}
               />
+              <p className="text-[11px] text-gray-500">
+                Reg: {initial?.vehicle?.registrationNumber ?? "—"}
+              </p>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">State</Label>
-              <Input
-                value={state}
-                onChange={(e) => setState(e.target.value.slice(0, 100))}
-                className="h-9 text-sm"
-                maxLength={100}
-              />
-            </div>
-          </div>
+          )}
 
-          {saveMutation.isError && (
+          {(saveMutation.isError || error) && (
             <p className="text-xs text-red-600">
-              {saveMutation.error instanceof Error ? saveMutation.error.message : "Failed to save"}
+              {error ??
+                (saveMutation.error instanceof Error
+                  ? saveMutation.error.message
+                  : "Failed to save")}
             </p>
           )}
         </div>
@@ -978,8 +998,11 @@ function EditUserInfoDialog({
           </Button>
           <Button
             size="sm"
-            disabled={!valid || saveMutation.isPending}
-            onClick={() => saveMutation.mutate()}
+            disabled={!valid || !dirty || saveMutation.isPending}
+            onClick={() => {
+              setError(null);
+              saveMutation.mutate();
+            }}
           >
             {saveMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
             Save
