@@ -1062,11 +1062,19 @@ function PayoutOnboardingCard({
                   </div>
                 )}
                 {status.razorpayxContactId && (
-                  <div className="sm:col-span-2 text-[11px] text-gray-500">
-                    RazorpayX contact: {status.razorpayxContactId}
-                    {status.razorpayxFundAccountId
-                      ? ` · fund account: ${status.razorpayxFundAccountId}`
-                      : ""}
+                  <div className="sm:col-span-2 text-[11px] text-gray-500 space-y-0.5">
+                    <div>RazorpayX contact: {status.razorpayxContactId}</div>
+                    {status.razorpayxBankFundAccountId && (
+                      <div>Bank fund account: {status.razorpayxBankFundAccountId}</div>
+                    )}
+                    {status.razorpayxUpiFundAccountId && (
+                      <div>UPI fund account: {status.razorpayxUpiFundAccountId}</div>
+                    )}
+                    {!status.razorpayxBankFundAccountId &&
+                      !status.razorpayxUpiFundAccountId &&
+                      status.razorpayxFundAccountId && (
+                        <div>Fund account: {status.razorpayxFundAccountId}</div>
+                      )}
                   </div>
                 )}
               </div>

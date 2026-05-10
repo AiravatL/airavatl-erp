@@ -630,11 +630,19 @@ function PayoutOnboardingCard({
                   </div>
                 )}
                 {status.razorpayxContactId && (
-                  <div className="sm:col-span-2 text-[11px] text-gray-500">
-                    RazorpayX contact: {status.razorpayxContactId}
-                    {status.razorpayxFundAccountId
-                      ? ` · fund account: ${status.razorpayxFundAccountId}`
-                      : ""}
+                  <div className="sm:col-span-2 text-[11px] text-gray-500 space-y-0.5">
+                    <div>RazorpayX contact: {status.razorpayxContactId}</div>
+                    {status.razorpayxBankFundAccountId && (
+                      <div>Bank fund account: {status.razorpayxBankFundAccountId}</div>
+                    )}
+                    {status.razorpayxUpiFundAccountId && (
+                      <div>UPI fund account: {status.razorpayxUpiFundAccountId}</div>
+                    )}
+                    {!status.razorpayxBankFundAccountId &&
+                      !status.razorpayxUpiFundAccountId &&
+                      status.razorpayxFundAccountId && (
+                        <div>Fund account: {status.razorpayxFundAccountId}</div>
+                      )}
                   </div>
                 )}
               </div>
@@ -693,24 +701,24 @@ function EditPayoutDialog({
   initial: PartnerPayoutStatus | undefined;
   onSaved: () => void;
 }) {
-  const [method, setMethod] = useState<"bank_account" | "upi">(
-    (initial?.payoutMethod as "bank_account" | "upi" | undefined) ?? "bank_account",
-  );
   const [holder, setHolder] = useState(initial?.bankAccountHolderName ?? "");
   const [accountNumber, setAccountNumber] = useState(initial?.bankAccountNumber ?? "");
   const [ifsc, setIfsc] = useState(initial?.bankIfscCode ?? "");
   const [bankName, setBankName] = useState(initial?.bankName ?? "");
   const [upi, setUpi] = useState(initial?.upiVpa ?? "");
+  const [primary, setPrimary] = useState<"bank_account" | "upi">(
+    (initial?.payoutMethod as "bank_account" | "upi" | undefined) ?? "bank_account",
+  );
 
   // Re-prime the form whenever the dialog opens so it shows the latest on-file data
   useEffect(() => {
     if (open) {
-      setMethod((initial?.payoutMethod as "bank_account" | "upi" | undefined) ?? "bank_account");
       setHolder(initial?.bankAccountHolderName ?? "");
       setAccountNumber(initial?.bankAccountNumber ?? "");
       setIfsc(initial?.bankIfscCode ?? "");
       setBankName(initial?.bankName ?? "");
       setUpi(initial?.upiVpa ?? "");
+      setPrimary((initial?.payoutMethod as "bank_account" | "upi" | undefined) ?? "bank_account");
     }
   }, [open, initial]);
 
@@ -718,22 +726,39 @@ function EditPayoutDialog({
   const BANK_ACCT_RE = /^[0-9]{8,18}$/;
   const UPI_RE = /^[a-zA-Z0-9._-]+@[a-zA-Z][a-zA-Z0-9.-]+$/;
 
-  const valid =
-    method === "bank_account"
-      ? holder.trim().length > 0 &&
-        BANK_ACCT_RE.test(accountNumber.trim()) &&
-        IFSC_RE.test(ifsc.trim().toUpperCase())
-      : UPI_RE.test(upi.trim());
+  const trimmedHolder = holder.trim();
+  const trimmedAccount = accountNumber.trim();
+  const trimmedIfsc = ifsc.trim().toUpperCase();
+  const trimmedUpi = upi.trim();
+
+  const bankAnyFilled = trimmedHolder.length > 0 || trimmedAccount.length > 0 || trimmedIfsc.length > 0;
+  const bankComplete =
+    trimmedHolder.length > 0 &&
+    BANK_ACCT_RE.test(trimmedAccount) &&
+    IFSC_RE.test(trimmedIfsc);
+  const bankPartial = bankAnyFilled && !bankComplete;
+  const upiValid = trimmedUpi.length === 0 || UPI_RE.test(trimmedUpi);
+  const hasUpi = trimmedUpi.length > 0 && upiValid;
+
+  // Effective primary: if the chosen rail isn't complete but the other is,
+  // we'll fall back to the available rail (matches API server-side derivation).
+  const effectivePrimary: "bank_account" | "upi" = bankComplete && (!hasUpi || primary === "bank_account")
+    ? "bank_account"
+    : hasUpi
+      ? "upi"
+      : primary;
+
+  const valid = (bankComplete || hasUpi) && !bankPartial && upiValid;
 
   const saveMutation = useMutation({
     mutationFn: () =>
       updatePayoutDetails(userId, {
-        payoutMethod: method,
-        bankAccountHolderName: method === "bank_account" ? holder.trim() : null,
-        bankAccountNumber: method === "bank_account" ? accountNumber.trim() : null,
-        bankIfscCode: method === "bank_account" ? ifsc.trim().toUpperCase() : null,
-        bankName: method === "bank_account" ? bankName.trim() || null : null,
-        upiVpa: method === "upi" ? upi.trim() : null,
+        payoutMethod: effectivePrimary,
+        bankAccountHolderName: bankComplete ? trimmedHolder : null,
+        bankAccountNumber: bankComplete ? trimmedAccount : null,
+        bankIfscCode: bankComplete ? trimmedIfsc : null,
+        bankName: bankComplete ? bankName.trim() || null : null,
+        upiVpa: hasUpi ? trimmedUpi : null,
       }),
     onSuccess: () => {
       onSaved();
@@ -747,93 +772,81 @@ function EditPayoutDialog({
         <DialogHeader>
           <DialogTitle>Edit Payout Details</DialogTitle>
           <DialogDescription className="text-xs">
-            Updating bank/UPI clears the existing RazorpayX link. After saving, click
-            <span className="font-medium"> Retry Onboarding</span> to re-create the fund account.
+            Add bank, UPI, or both. Saving clears the existing RazorpayX link;
+            click <span className="font-medium">Retry Onboarding</span> to re-create
+            the fund accounts on RazorpayX.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">Payout Method</Label>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={method === "bank_account" ? "default" : "outline"}
-                className="h-8 text-xs flex-1"
-                onClick={() => setMethod("bank_account")}
-              >
-                Bank Account
-              </Button>
-              <Button
-                size="sm"
-                variant={method === "upi" ? "default" : "outline"}
-                className="h-8 text-xs flex-1"
-                onClick={() => setMethod("upi")}
-              >
-                UPI
-              </Button>
+        <div className="space-y-4 py-2">
+          {/* Bank section */}
+          <div className="space-y-3 rounded-md border border-gray-200 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-700">Bank Account</p>
+              {bankComplete && (
+                <span className="text-[10px] text-emerald-700">Complete</span>
+              )}
+              {bankPartial && (
+                <span className="text-[10px] text-amber-700">Incomplete</span>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Account Holder</Label>
+              <Input
+                value={holder}
+                onChange={(e) => setHolder(e.target.value.slice(0, 100))}
+                className="h-9 text-sm"
+                maxLength={100}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Account Number</Label>
+              <Input
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 18))}
+                className="h-9 text-sm"
+                inputMode="numeric"
+                placeholder="8-18 digits"
+                maxLength={18}
+              />
+              {trimmedAccount.length > 0 && !BANK_ACCT_RE.test(trimmedAccount) && (
+                <p className="text-[11px] text-red-500">Account number must be 8-18 digits</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">IFSC Code</Label>
+              <Input
+                value={ifsc}
+                onChange={(e) => setIfsc(e.target.value.toUpperCase().slice(0, 11))}
+                className="h-9 text-sm"
+                placeholder="SBIN0001234"
+                maxLength={11}
+              />
+              {trimmedIfsc.length > 0 && !IFSC_RE.test(trimmedIfsc) && (
+                <p className="text-[11px] text-red-500">Invalid IFSC format</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Bank Name (optional)</Label>
+              <Input
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value.slice(0, 100))}
+                className="h-9 text-sm"
+                maxLength={100}
+              />
             </div>
           </div>
 
-          {method === "bank_account" ? (
-            <>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
-                  Account Holder <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  value={holder}
-                  onChange={(e) => setHolder(e.target.value.slice(0, 100))}
-                  className="h-9 text-sm"
-                  maxLength={100}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
-                  Account Number <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 18))}
-                  className="h-9 text-sm"
-                  inputMode="numeric"
-                  placeholder="8-18 digits"
-                  maxLength={18}
-                />
-                {accountNumber.length > 0 && !BANK_ACCT_RE.test(accountNumber) && (
-                  <p className="text-[11px] text-red-500">Account number must be 8-18 digits</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
-                  IFSC Code <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  value={ifsc}
-                  onChange={(e) => setIfsc(e.target.value.toUpperCase().slice(0, 11))}
-                  className="h-9 text-sm"
-                  placeholder="SBIN0001234"
-                  maxLength={11}
-                />
-                {ifsc.length > 0 && !IFSC_RE.test(ifsc.toUpperCase()) && (
-                  <p className="text-[11px] text-red-500">Invalid IFSC format</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Bank Name (optional)</Label>
-                <Input
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value.slice(0, 100))}
-                  className="h-9 text-sm"
-                  maxLength={100}
-                />
-              </div>
-            </>
-          ) : (
+          {/* UPI section */}
+          <div className="space-y-3 rounded-md border border-gray-200 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-700">UPI</p>
+              {hasUpi && (
+                <span className="text-[10px] text-emerald-700">Complete</span>
+              )}
+            </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">
-                UPI VPA <span className="text-red-500">*</span>
-              </Label>
+              <Label className="text-xs font-medium">UPI VPA</Label>
               <Input
                 value={upi}
                 onChange={(e) => setUpi(e.target.value.slice(0, 100))}
@@ -841,12 +854,43 @@ function EditPayoutDialog({
                 placeholder="name@bank"
                 maxLength={100}
               />
-              {upi.length > 0 && !UPI_RE.test(upi.trim()) && (
+              {trimmedUpi.length > 0 && !UPI_RE.test(trimmedUpi) && (
                 <p className="text-[11px] text-red-500">
                   Invalid UPI format (must be like name@bank)
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Primary rail picker — only meaningful when both rails are complete */}
+          {bankComplete && hasUpi && (
+            <div className="space-y-1.5 rounded-md bg-gray-50 p-3">
+              <Label className="text-xs font-medium">Primary rail for payouts</Label>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={primary === "bank_account" ? "default" : "outline"}
+                  className="h-8 text-xs flex-1"
+                  onClick={() => setPrimary("bank_account")}
+                >
+                  Bank Account
+                </Button>
+                <Button
+                  size="sm"
+                  variant={primary === "upi" ? "default" : "outline"}
+                  className="h-8 text-xs flex-1"
+                  onClick={() => setPrimary("upi")}
+                >
+                  UPI
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!bankComplete && !hasUpi && (bankAnyFilled || trimmedUpi.length > 0) && (
+            <p className="text-[11px] text-amber-700">
+              Provide at least one complete rail (bank account or UPI VPA).
+            </p>
           )}
 
           {saveMutation.isError && (

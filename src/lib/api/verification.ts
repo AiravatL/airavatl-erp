@@ -140,6 +140,8 @@ export interface PartnerPayoutStatus {
   upiVerified?: boolean | null;
   razorpayxContactId?: string | null;
   razorpayxFundAccountId?: string | null;
+  razorpayxBankFundAccountId?: string | null;
+  razorpayxUpiFundAccountId?: string | null;
   isValidated?: boolean | null;
   validationStatus?: string | null;
   createdAt?: string;
@@ -163,6 +165,8 @@ export interface PendingPayoutOnboardingItem {
   upiVerified: boolean | null;
   razorpayxContactId: string | null;
   razorpayxFundAccountId: string | null;
+  razorpayxBankFundAccountId: string | null;
+  razorpayxUpiFundAccountId: string | null;
   isValidated: boolean | null;
   validationStatus: string | null;
   createdAt: string;
@@ -210,7 +214,10 @@ export async function retryPayoutOnboarding(
 }
 
 export interface UpdatePayoutDetailsInput {
-  payoutMethod: "bank_account" | "upi";
+  // Optional preference indicating which rail is "primary" for downstream
+  // payouts. When omitted the API defaults to bank_account if both rails are
+  // present, else picks the only present rail.
+  payoutMethod?: "bank_account" | "upi";
   bankAccountHolderName?: string | null;
   bankAccountNumber?: string | null;
   bankIfscCode?: string | null;

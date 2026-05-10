@@ -9,7 +9,9 @@ const BANK_ACCT_RE = /^[0-9]{8,18}$/;
 const UPI_RE = /^[a-zA-Z0-9._-]+@[a-zA-Z][a-zA-Z0-9.-]+$/;
 
 interface PayoutInput {
-  payoutMethod: "bank_account" | "upi";
+  // Optional preference. When omitted, derived from which rails are present
+  // (bank wins if both, matching the legacy submit-RPC default).
+  payoutMethod?: "bank_account" | "upi";
   bankAccountHolderName?: string | null;
   bankAccountNumber?: string | null;
   bankIfscCode?: string | null;
@@ -17,12 +19,24 @@ interface PayoutInput {
   upiVpa?: string | null;
 }
 
-function validate(body: unknown): { ok: true; data: PayoutInput } | { ok: false; message: string } {
+interface ValidatedPayout {
+  payoutMethod: "bank_account" | "upi";
+  bankAccountHolderName: string | null;
+  bankAccountNumber: string | null;
+  bankIfscCode: string | null;
+  bankName: string | null;
+  upiVpa: string | null;
+  hasBank: boolean;
+  hasUpi: boolean;
+}
+
+function validate(body: unknown): { ok: true; data: ValidatedPayout } | { ok: false; message: string } {
   if (!body || typeof body !== "object") return { ok: false, message: "invalid body" };
-  const b = body as Record<string, unknown>;
+  const b = body as Record<string, unknown> & PayoutInput;
+
   const method = b.payoutMethod;
-  if (method !== "bank_account" && method !== "upi") {
-    return { ok: false, message: "payoutMethod must be 'bank_account' or 'upi'" };
+  if (method !== undefined && method !== "bank_account" && method !== "upi") {
+    return { ok: false, message: "payoutMethod, when set, must be 'bank_account' or 'upi'" };
   }
 
   const holder = typeof b.bankAccountHolderName === "string" ? b.bankAccountHolderName.trim() : null;
@@ -31,9 +45,12 @@ function validate(body: unknown): { ok: true; data: PayoutInput } | { ok: false;
   const bankName = typeof b.bankName === "string" ? b.bankName.trim() : null;
   const upi = typeof b.upiVpa === "string" ? b.upiVpa.trim() : null;
 
-  if (method === "bank_account") {
+  // A "complete" rail is one where every required field is provided. We allow
+  // either or both rails as long as at least one is complete.
+  const bankProvidedAny = !!(holder || acct || ifsc);
+  if (bankProvidedAny) {
     if (!holder || holder.length < 1 || holder.length > 100) {
-      return { ok: false, message: "bankAccountHolderName: required (1-100 chars)" };
+      return { ok: false, message: "bankAccountHolderName: required (1-100 chars) when bank fields are provided" };
     }
     if (!acct || !BANK_ACCT_RE.test(acct)) {
       return { ok: false, message: "bankAccountNumber: must be 8-18 digits" };
@@ -41,21 +58,41 @@ function validate(body: unknown): { ok: true; data: PayoutInput } | { ok: false;
     if (!ifsc || !IFSC_RE.test(ifsc)) {
       return { ok: false, message: "bankIfscCode: invalid IFSC format" };
     }
-  } else {
-    if (!upi || !UPI_RE.test(upi)) {
-      return { ok: false, message: "upiVpa: must be a valid UPI VPA (e.g. name@bank)" };
-    }
   }
+
+  if (upi && !UPI_RE.test(upi)) {
+    return { ok: false, message: "upiVpa: must be a valid UPI VPA (e.g. name@bank)" };
+  }
+
+  const hasBank = !!(holder && acct && ifsc);
+  const hasUpi = !!upi;
+  if (!hasBank && !hasUpi) {
+    return { ok: false, message: "Provide bank details, UPI, or both" };
+  }
+
+  // If method is supplied, it must match a rail that's actually present.
+  if (method === "bank_account" && !hasBank) {
+    return { ok: false, message: "payoutMethod=bank_account but bank details are incomplete" };
+  }
+  if (method === "upi" && !hasUpi) {
+    return { ok: false, message: "payoutMethod=upi but no UPI VPA provided" };
+  }
+
+  // Derive preferred method when not supplied: bank wins if both available
+  // (matches the legacy submit-RPC behaviour where bank was the default).
+  const resolvedMethod: "bank_account" | "upi" = method ?? (hasBank ? "bank_account" : "upi");
 
   return {
     ok: true,
     data: {
-      payoutMethod: method,
-      bankAccountHolderName: holder,
-      bankAccountNumber: acct,
-      bankIfscCode: ifsc,
-      bankName,
-      upiVpa: upi,
+      payoutMethod: resolvedMethod,
+      bankAccountHolderName: hasBank ? holder : null,
+      bankAccountNumber: hasBank ? acct : null,
+      bankIfscCode: hasBank ? ifsc : null,
+      bankName: hasBank ? bankName : null,
+      upiVpa: hasUpi ? upi : null,
+      hasBank,
+      hasUpi,
     },
   };
 }
@@ -89,14 +126,15 @@ export async function PUT(
   }
 
   // Updating bank/UPI invalidates the existing RazorpayX onboarding — clear
-  // those IDs so a subsequent Retry creates a fresh contact + fund account.
+  // ALL razorpayx_* fund-account columns so a subsequent Retry creates fresh
+  // accounts on a fresh contact (and doesn't leak stale per-rail IDs).
   const updates = {
     payout_method: input.payoutMethod,
-    bank_account_holder_name: input.payoutMethod === "bank_account" ? input.bankAccountHolderName : null,
-    bank_account_number: input.payoutMethod === "bank_account" ? input.bankAccountNumber : null,
-    bank_ifsc_code: input.payoutMethod === "bank_account" ? input.bankIfscCode : null,
-    bank_name: input.payoutMethod === "bank_account" ? input.bankName ?? null : null,
-    upi_vpa: input.payoutMethod === "upi" ? input.upiVpa : null,
+    bank_account_holder_name: input.bankAccountHolderName,
+    bank_account_number: input.bankAccountNumber,
+    bank_ifsc_code: input.bankIfscCode,
+    bank_name: input.bankName,
+    upi_vpa: input.upiVpa,
     upi_verified: false,
     upi_verified_at: null,
     razorpayx_contact_id: null,
@@ -142,8 +180,8 @@ export async function PUT(
       p_old_values: {},
       p_new_values: {
         payout_method: input.payoutMethod,
-        has_bank: !!input.bankAccountNumber,
-        has_upi: !!input.upiVpa,
+        has_bank: input.hasBank,
+        has_upi: input.hasUpi,
       },
     } as never);
   } catch {

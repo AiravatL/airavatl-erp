@@ -33,6 +33,8 @@ export async function GET() {
       upi_verified,
       razorpayx_contact_id,
       razorpayx_fund_account_id,
+      razorpayx_bank_fund_account_id,
+      razorpayx_upi_fund_account_id,
       is_validated,
       validation_status,
       created_at,
@@ -71,6 +73,8 @@ export async function GET() {
     upi_verified: boolean | null;
     razorpayx_contact_id: string | null;
     razorpayx_fund_account_id: string | null;
+    razorpayx_bank_fund_account_id: string | null;
+    razorpayx_upi_fund_account_id: string | null;
     is_validated: boolean | null;
     validation_status: string | null;
     created_at: string;
@@ -107,6 +111,8 @@ export async function GET() {
     upiVerified: row.upi_verified,
     razorpayxContactId: row.razorpayx_contact_id,
     razorpayxFundAccountId: row.razorpayx_fund_account_id,
+    razorpayxBankFundAccountId: row.razorpayx_bank_fund_account_id,
+    razorpayxUpiFundAccountId: row.razorpayx_upi_fund_account_id,
     isValidated: row.is_validated,
     validationStatus: row.validation_status,
     createdAt: row.created_at,

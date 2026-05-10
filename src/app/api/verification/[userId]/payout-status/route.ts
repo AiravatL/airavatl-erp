@@ -37,7 +37,7 @@ export async function GET(
   const { data, error } = await adminClient
     .from("driver_payout_settings")
     .select(
-      "user_id, driver_type, payout_method, bank_account_holder_name, bank_account_number, bank_ifsc_code, bank_name, upi_vpa, upi_verified, razorpayx_contact_id, razorpayx_fund_account_id, is_validated, validation_status, created_at, updated_at",
+      "user_id, driver_type, payout_method, bank_account_holder_name, bank_account_number, bank_ifsc_code, bank_name, upi_vpa, upi_verified, razorpayx_contact_id, razorpayx_fund_account_id, razorpayx_bank_fund_account_id, razorpayx_upi_fund_account_id, is_validated, validation_status, created_at, updated_at",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -71,12 +71,17 @@ export async function GET(
     upi_verified: boolean | null;
     razorpayx_contact_id: string | null;
     razorpayx_fund_account_id: string | null;
+    razorpayx_bank_fund_account_id: string | null;
+    razorpayx_upi_fund_account_id: string | null;
     is_validated: boolean | null;
     validation_status: string | null;
     created_at: string;
     updated_at: string;
   };
 
+  // "active" means the partner has at least one rail fully onboarded. The
+  // legacy razorpayx_fund_account_id mirrors the primary rail (per
+  // payout_method); per-rail flags below tell the UI which rails are linked.
   const status: "active" | "pending_razorpayx" =
     row.is_validated && row.razorpayx_contact_id && row.razorpayx_fund_account_id
       ? "active"
@@ -101,6 +106,8 @@ export async function GET(
       upiVerified: row.upi_verified,
       razorpayxContactId: row.razorpayx_contact_id,
       razorpayxFundAccountId: row.razorpayx_fund_account_id,
+      razorpayxBankFundAccountId: row.razorpayx_bank_fund_account_id,
+      razorpayxUpiFundAccountId: row.razorpayx_upi_fund_account_id,
       isValidated: row.is_validated,
       validationStatus: row.validation_status,
       createdAt: row.created_at,
