@@ -101,6 +101,8 @@ export async function PUT(
     upi_verified_at: null,
     razorpayx_contact_id: null,
     razorpayx_fund_account_id: null,
+    razorpayx_bank_fund_account_id: null,
+    razorpayx_upi_fund_account_id: null,
     is_validated: false,
     validation_status: "pending",
   };

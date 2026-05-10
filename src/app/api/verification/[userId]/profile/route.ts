@@ -153,6 +153,22 @@ export async function PUT(
           { status: 500 },
         );
       }
+
+      // Also drop the old DPS row for that driver_type so a future
+      // verification can land cleanly. DPS uniqueness is on
+      // (user_id, driver_type) — leaving stale rows breaks the .single()
+      // lookup in the onboarding edge function.
+      const { error: dpsDelErr } = await adminClient
+        .from("driver_payout_settings")
+        .delete()
+        .eq("user_id", userId)
+        .eq("driver_type", oldType);
+      if (dpsDelErr) {
+        return NextResponse.json(
+          { ok: false, message: `Failed to clear old payout settings: ${dpsDelErr.message}` },
+          { status: 500 },
+        );
+      }
     }
 
     // 2) Insert a stub for the new type so onboarding/verification has somewhere to land.

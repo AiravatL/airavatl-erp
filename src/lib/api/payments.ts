@@ -39,6 +39,10 @@ export interface PaymentQueueItem {
   reviewedByRole: string;
   reviewedAt: string | null;
   createdAt: string;
+  consignerId: string | null;
+  consignerName: string;
+  consignerBusinessName: string;
+  consignerPhone: string;
 }
 
 export interface ListPaymentQueueFilters {

@@ -86,10 +86,22 @@ export async function confirmVerificationUpload(
   });
 }
 
+export interface SubmitVerificationResult {
+  userId: string;
+  verifiedAt: string;
+  payoutOnboarding: {
+    status: "active" | "pending_razorpayx";
+    razorpayxContactId?: string;
+    razorpayxFundAccountId?: string;
+    alreadyOnboarded?: boolean;
+    error?: { code: string; message: string };
+  };
+}
+
 export async function submitVerification(
   userId: string,
   data: SubmitDriverVerificationInput | SubmitTransporterVerificationInput,
-): Promise<{ userId: string; verifiedAt: string }> {
+): Promise<SubmitVerificationResult> {
   return apiRequest(`/api/verification/${userId}/submit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

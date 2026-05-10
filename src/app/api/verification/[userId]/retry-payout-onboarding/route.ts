@@ -28,36 +28,29 @@ export async function POST(
     );
   }
 
-  // Fast idempotency check: if already onboarded, skip the edge function call.
-  type SettingsRow = {
-    is_validated: boolean | null;
-    razorpayx_contact_id: string | null;
-    razorpayx_fund_account_id: string | null;
-  };
-  const { data: existingData } = await adminClient
-    .from("driver_payout_settings")
-    .select("is_validated, razorpayx_contact_id, razorpayx_fund_account_id")
-    .eq("user_id", userId)
+  // Look up the partner's current user_type so the DPS lookup can filter by
+  // (user_id, driver_type) — DPS uniqueness is on that pair, so a partner who
+  // was ever swapped between roles could in principle have two rows.
+  type ProfileRow = { user_type: string | null };
+  const { data: profileData } = await adminClient
+    .from("user_profiles")
+    .select("user_type")
+    .eq("id", userId)
     .maybeSingle();
-  const existing = existingData as unknown as SettingsRow | null;
-
-  if (
-    existing?.is_validated &&
-    existing.razorpayx_contact_id &&
-    existing.razorpayx_fund_account_id
-  ) {
-    return NextResponse.json({
-      ok: true,
-      data: {
-        payoutOnboarding: {
-          status: "active",
-          razorpayxContactId: existing.razorpayx_contact_id,
-          razorpayxFundAccountId: existing.razorpayx_fund_account_id,
-          alreadyOnboarded: true,
-        },
-      },
-    });
+  const profile = profileData as unknown as ProfileRow | null;
+  const driverType = profile?.user_type;
+  if (driverType !== "individual_driver" && driverType !== "transporter") {
+    return NextResponse.json(
+      { ok: false, message: "Partner is not a driver or transporter" },
+      { status: 400 },
+    );
   }
+
+  // No fast-skip here. With the dual-rail design (bank + UPI), we can't tell
+  // from this layer whether all wanted rails are onboarded — only the edge
+  // function has the per-rail truth. The edge function is itself idempotent
+  // (reuses contacts by reference_id, dedupes fund accounts by IFSC/VPA), so
+  // an extra invocation for an already-onboarded partner is a no-op.
 
   // Invoke the edge function — it has the RazorpayX secrets, calls the
   // RazorpayX /contacts + /fund_accounts APIs, and finalizes via the
@@ -72,7 +65,7 @@ export async function POST(
   };
   const { data, error } = await adminClient.functions.invoke<EdgeResponse>(
     "admin-onboard-driver-payout",
-    { body: { userId, actorUserId: actorResult.actor.id } },
+    { body: { userId, actorUserId: actorResult.actor.id, driverType } },
   );
 
   if (error) {

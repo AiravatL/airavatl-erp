@@ -21,7 +21,10 @@ const PAGE_SIZE = 50;
 
 export default function TripHistoryPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+  const canViewHistory =
+    user?.role === "super_admin" ||
+    user?.role === "admin" ||
+    user?.role === "operations";
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -31,13 +34,13 @@ export default function TripHistoryPage() {
   const completedQuery = useQuery({
     queryKey: queryKeys.appTrips({ search: debouncedSearch || undefined, status: "completed", limit: PAGE_SIZE, offset }),
     queryFn: () => listAppTrips({ search: debouncedSearch || undefined, status: "completed", limit: PAGE_SIZE, offset }),
-    enabled: isAdmin && statusFilter !== "cancelled",
+    enabled: canViewHistory && statusFilter !== "cancelled",
   });
 
   const cancelledQuery = useQuery({
     queryKey: queryKeys.appTrips({ search: debouncedSearch || undefined, status: "cancelled", limit: PAGE_SIZE, offset }),
     queryFn: () => listAppTrips({ search: debouncedSearch || undefined, status: "cancelled", limit: PAGE_SIZE, offset }),
-    enabled: isAdmin && statusFilter !== "completed",
+    enabled: canViewHistory && statusFilter !== "completed",
   });
 
   const items = useMemo(() => {
@@ -55,11 +58,11 @@ export default function TripHistoryPage() {
 
   const isLoading = completedQuery.isLoading || cancelledQuery.isLoading;
 
-  if (!isAdmin) {
+  if (!canViewHistory) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Trip History" description="Admin only" />
-        <Card><CardContent className="p-6"><p className="text-sm text-gray-600">Trip History is available only to Admin roles.</p></CardContent></Card>
+        <PageHeader title="Trip History" description="Admin / Operations only" />
+        <Card><CardContent className="p-6"><p className="text-sm text-gray-600">Trip History is available only to Admin and Operations roles.</p></CardContent></Card>
       </div>
     );
   }

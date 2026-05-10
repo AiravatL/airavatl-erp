@@ -35,6 +35,10 @@ interface QueueRow {
   reviewed_by_role: string | null;
   reviewed_at: string | null;
   created_at: string;
+  consigner_id: string | null;
+  consigner_name: string | null;
+  consigner_business_name: string | null;
+  consigner_phone: string | null;
 }
 
 function toNumber(value: number | string | null | undefined): number | null {
@@ -103,6 +107,10 @@ export async function GET(request: Request) {
     reviewedByRole: row.reviewed_by_role ?? "",
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
+    consignerId: row.consigner_id,
+    consignerName: row.consigner_name ?? "",
+    consignerBusinessName: row.consigner_business_name ?? "",
+    consignerPhone: row.consigner_phone ?? "",
   }));
 
   return NextResponse.json({ ok: true, data: normalized });

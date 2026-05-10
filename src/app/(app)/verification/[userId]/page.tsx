@@ -183,9 +183,16 @@ export default function VerificationDetailPage() {
         notes: currentNotes.trim() || undefined,
       });
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidateAll();
-      router.push("/verification");
+      // Verification itself succeeded; the auto-chained RazorpayX onboarding
+      // can still fail (bad bank/IFSC, RazorpayX rate-limit, etc.). When that
+      // happens, stay on the page so the admin can see the error and hit
+      // "Retry RazorpayX onboarding" — the data is too easy to lose track of
+      // if we silently bounce them back to the list.
+      if (result?.payoutOnboarding?.status === "active") {
+        router.push("/verification");
+      }
     },
   });
 
@@ -384,6 +391,21 @@ export default function VerificationDetailPage() {
           </p>
         </div>
       )}
+
+      {/* Verified but RazorpayX onboarding didn't complete — keep the admin
+          on this page so they can hit Retry without losing context. */}
+      {submitMutation.isSuccess &&
+        submitMutation.data?.payoutOnboarding?.status !== "active" && (
+          <div className="rounded-md bg-amber-50 p-3">
+            <p className="text-sm font-medium text-amber-800">
+              Verified, but RazorpayX onboarding did not complete.
+            </p>
+            <p className="mt-1 text-sm text-amber-700">
+              {submitMutation.data?.payoutOnboarding?.error?.message ??
+                "Use the Retry RazorpayX onboarding button below."}
+            </p>
+          </div>
+        )}
 
       {/* Payout onboarding (only for verified partners) */}
       {isVerified && (

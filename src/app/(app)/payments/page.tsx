@@ -290,7 +290,7 @@ export default function PaymentsPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         <Input
-          placeholder="Search by trip, beneficiary, requester..."
+          placeholder="Search by trip, beneficiary, consigner..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           className="h-8 pl-8 text-sm"
@@ -381,6 +381,24 @@ export default function PaymentsPage() {
                         Pay to: <span className="font-medium text-gray-900">{first.beneficiary || "N/A"}</span>
                       </span>
                     </div>
+
+                    {/* Consigner info */}
+                    {(first.consignerName || first.consignerBusinessName || first.consignerPhone) && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-1 text-[11px] text-gray-500">
+                        <span>
+                          Consigner:{" "}
+                          <span className="font-medium text-gray-700">
+                            {first.consignerBusinessName || first.consignerName || "—"}
+                          </span>
+                          {first.consignerBusinessName && first.consignerName && (
+                            <span className="text-gray-400"> · {first.consignerName}</span>
+                          )}
+                          {first.consignerPhone && (
+                            <span className="text-gray-400"> · {first.consignerPhone}</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Requester / Reviewer trail */}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2 text-[11px] text-gray-500">
