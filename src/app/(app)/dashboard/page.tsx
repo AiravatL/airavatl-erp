@@ -9,13 +9,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/lib/auth/auth-context";
 import { getAppOverview } from "@/lib/api/app-reports";
 import { listAppTrips, type AppTripItem } from "@/lib/api/app-reports";
+import { listTripRequests } from "@/lib/api/trip-requests";
 import { formatCurrency } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query/keys";
 import type { Role } from "@/lib/types";
 import {
   Truck, CreditCard, Receipt, ArrowRight, Plus,
   TicketCheck, Users, TrendingUp, PackagePlus,
-  MapPin, BarChart3, ShieldCheck,
+  MapPin, BarChart3, ShieldCheck, ClipboardList,
 } from "lucide-react";
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -66,10 +67,23 @@ export default function DashboardPage() {
     staleTime: 30_000,
   });
 
+  // Pending trip requests — visible to anyone who can view trip requests
+  const canViewTripRequests =
+    role === "super_admin" || role === "admin" || role === "operations" || role === "sales_consigner";
+  const tripRequestsQuery = useQuery({
+    queryKey: queryKeys.tripRequests({ status: "pending_review", limit: 6 }),
+    queryFn: () => listTripRequests({ status: "pending_review", limit: 6 }),
+    enabled: !!user && canViewTripRequests,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
   const metrics = overviewQuery.data?.metrics;
   const activeTrips = (tripsQuery.data?.items ?? []).filter(
     (t) => !["completed", "cancelled", "driver_rejected"].includes(t.status),
   );
+  const pendingTripRequests = tripRequestsQuery.data?.items ?? [];
+  const pendingTripRequestsTotal = tripRequestsQuery.data?.total ?? 0;
 
   // Quick actions by role
   const quickActions = getQuickActions(role);
@@ -140,7 +154,59 @@ export default function DashboardPage() {
       )}
 
       {/* Main content */}
-      <div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Pending Trip Requests */}
+        {canViewTripRequests && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-gray-900">
+                  Pending Trip Requests
+                  {pendingTripRequestsTotal > 0 && (
+                    <Badge variant="outline" className="border-0 text-[10px] font-medium ml-2 bg-amber-100 text-amber-700">
+                      {pendingTripRequestsTotal}
+                    </Badge>
+                  )}
+                </CardTitle>
+                <Link href="/trip-requests" className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                  View all <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {tripRequestsQuery.isLoading ? (
+                <div className="px-4 py-6 text-center text-sm text-gray-400">Loading...</div>
+              ) : pendingTripRequests.length === 0 ? (
+                <div className="px-4 py-6 text-center">
+                  <ClipboardList className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">No pending requests</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {pendingTripRequests.slice(0, 5).map((req) => (
+                    <Link key={req.id} href={`/trip-requests/${req.id}`}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-sm font-medium text-gray-900">{req.request_number}</span>
+                          <Badge variant="outline" className={`border-0 text-[10px] font-medium ${
+                            req.source === "enterprise_portal" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"
+                          }`}>
+                            {req.source === "enterprise_portal" ? "Portal" : "Sales"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">
+                          {req.consigner_display ?? "—"} · {req.pickup_city ?? req.pickup_address} → {req.delivery_city ?? req.delivery_address}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Active Trips */}
         <Card>
           <CardHeader className="pb-3">
@@ -217,7 +283,10 @@ function StatCard({ icon: Icon, iconBg, iconColor, value, label, isAmount }: {
 function getQuickActions(role: Role) {
   switch (role) {
     case "sales_consigner":
-      return [];
+      return [
+        { label: "New Trip Request", href: "/trip-requests/new", icon: Plus },
+        { label: "Trip Requests", href: "/trip-requests", icon: ClipboardList },
+      ];
     case "sales_vehicles":
       return [
         { label: "Fleet", href: "/fleet", icon: Users },
@@ -227,6 +296,7 @@ function getQuickActions(role: Role) {
     case "operations":
       return [
         { label: "New Auction", href: "/delivery-requests/new", icon: Plus },
+        { label: "Trip Requests", href: "/trip-requests", icon: ClipboardList },
         { label: "Trips", href: "/trips", icon: Truck },
         { label: "Live Map", href: "/fleet/live-map", icon: MapPin },
       ];

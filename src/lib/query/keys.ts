@@ -61,6 +61,16 @@ export const queryKeys = {
     limit?: number;
     offset?: number;
   }) => ["delivery-requests", "list", filters] as const,
+  tripRequests: (filters: {
+    search?: string;
+    status?: string;
+    source?: string;
+    consignerId?: string;
+    limit?: number;
+    offset?: number;
+  }) => ["trip-requests", "list", filters] as const,
+  tripRequest: (requestId: string) =>
+    ["trip-requests", "detail", requestId] as const,
   deliveryRequest: (requestId: string) =>
     ["delivery-requests", "detail", requestId] as const,
   deliveryRequestStats: ["delivery-requests", "stats"] as const,

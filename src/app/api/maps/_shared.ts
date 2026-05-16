@@ -8,6 +8,7 @@ const MAPS_ALLOWED_ROLES: Role[] = [
   "super_admin",
   "admin",
   "operations",
+  "sales_consigner",
 ];
 
 export async function requireMapsActor() {

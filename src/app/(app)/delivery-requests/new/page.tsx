@@ -30,6 +30,7 @@ import {
 } from "@/lib/api/delivery-requests";
 import { apiRequest } from "@/lib/api/http";
 import type { PlaceDetails, RouteResult, AuctionConsigner } from "@/lib/api/delivery-requests";
+import { getTripRequest, linkTripRequestToAuction } from "@/lib/api/trip-requests";
 import { queryKeys } from "@/lib/query/keys";
 import {
   CARGO_TYPE_LABELS,
@@ -67,6 +68,7 @@ export default function CreateDeliveryRequestPage() {
   // Edit or Repeat mode
   const editId = searchParams.get("edit") || null;
   const repeatId = searchParams.get("repeat") || null;
+  const fromTripRequestId = searchParams.get("fromTripRequest") || null;
   const prefillId = editId || repeatId;
   const isEditMode = !!editId;
   const isRepeatMode = !!repeatId;
@@ -75,6 +77,15 @@ export default function CreateDeliveryRequestPage() {
     queryKey: queryKeys.deliveryRequest(prefillId ?? ""),
     queryFn: () => getDeliveryRequest(prefillId!),
     enabled: !!prefillId,
+  });
+
+  // Trip request prefill — pulls cargo + contact fields from a pending
+  // trip request. Location coordinates aren't prefilled (trip requests may
+  // be free-text), so ops still picks pickup/delivery via LocationPicker.
+  const tripRequestQuery = useQuery({
+    queryKey: queryKeys.tripRequest(fromTripRequestId ?? ""),
+    queryFn: () => getTripRequest(fromTripRequestId!),
+    enabled: !!fromTripRequestId,
   });
 
   // Form state
@@ -168,6 +179,51 @@ export default function CreateDeliveryRequestPage() {
     setAuctionDurationMinutes(String(r.auction_duration_minutes ?? 60));
     setEditLoaded(true);
   }, [prefillId, editQuery.data, editLoaded, isRepeatMode]);
+
+  // Pre-fill from a trip request. We prefill cargo + (when present)
+  // pickup/delivery coordinates. Linking happens in onSuccess.
+  const [tripRequestPrefilled, setTripRequestPrefilled] = useState(false);
+  useEffect(() => {
+    if (!fromTripRequestId || !tripRequestQuery.data || tripRequestPrefilled) return;
+    const r = tripRequestQuery.data;
+
+    if (r.pickup_latitude != null && r.pickup_longitude != null) {
+      setPickup({
+        placeId: r.pickup_place_id ?? "",
+        formattedAddress: r.pickup_address,
+        latitude: r.pickup_latitude,
+        longitude: r.pickup_longitude,
+        city: r.pickup_city ?? "",
+        state: r.pickup_state ?? null,
+        primaryText: r.pickup_city ?? r.pickup_address,
+        secondaryText: [r.pickup_city, r.pickup_state].filter(Boolean).join(", "),
+        addressComponents: null,
+      });
+    }
+    if (r.delivery_latitude != null && r.delivery_longitude != null) {
+      setDelivery({
+        placeId: r.delivery_place_id ?? "",
+        formattedAddress: r.delivery_address,
+        latitude: r.delivery_latitude,
+        longitude: r.delivery_longitude,
+        city: r.delivery_city ?? "",
+        state: r.delivery_state ?? null,
+        primaryText: r.delivery_city ?? r.delivery_address,
+        secondaryText: [r.delivery_city, r.delivery_state].filter(Boolean).join(", "),
+        addressComponents: null,
+      });
+    }
+
+    setCargoDescription(r.cargo_description ?? "");
+    if (r.cargo_weight_kg && r.cargo_weight_kg > 0) {
+      setCargoWeight(String(Math.round((r.cargo_weight_kg / 1000) * 100) / 100));
+      setWeightUnit("ton");
+    }
+    if (r.cargo_type) setCargoType(r.cargo_type);
+    if (r.special_instructions) setSpecialInstructions(r.special_instructions);
+    if (r.consigner_id) setConsignerProfileId(r.consigner_id);
+    setTripRequestPrefilled(true);
+  }, [fromTripRequestId, tripRequestQuery.data, tripRequestPrefilled]);
 
   // Consigner search — Popover handles open/close + outside-click.
   const [debouncedConsignerSearch, setDebouncedConsignerSearch] = useState("");
@@ -299,11 +355,24 @@ export default function CreateDeliveryRequestPage() {
         internalNotes: internalNotes.trim() || undefined,
       });
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["delivery-requests"] });
       const id = (result as { requestId?: string; request_id?: string }).requestId
         ?? (result as { request_id?: string }).request_id
         ?? editId;
+
+      // If we came from a trip request, link it (best-effort) so the trip
+      // request flips to converted and points back at this auction. A link
+      // failure doesn't block the redirect — ops can retry from the request.
+      if (fromTripRequestId && id && !isEditMode) {
+        try {
+          await linkTripRequestToAuction(fromTripRequestId, id);
+          queryClient.invalidateQueries({ queryKey: ["trip-requests"] });
+        } catch (linkErr) {
+          // Surface as warning but still navigate to the new auction.
+          console.warn("Failed to link trip request to auction:", linkErr);
+        }
+      }
       router.push(`/delivery-requests/${id}`);
     },
     onError: (err) => {
@@ -320,9 +389,30 @@ export default function CreateDeliveryRequestPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={isEditMode ? "Edit Auction" : isRepeatMode ? "Repeat Auction" : "Create Delivery Request"}
-        description={isEditMode ? "Modify auction details (only before any bids)" : isRepeatMode ? "Create a new auction with pre-filled details from the previous one" : "Create an auction for drivers to bid on"}
+        title={isEditMode ? "Edit Auction" : isRepeatMode ? "Repeat Auction" : fromTripRequestId ? "Create Auction from Trip Request" : "Create Delivery Request"}
+        description={isEditMode ? "Modify auction details (only before any bids)" : isRepeatMode ? "Create a new auction with pre-filled details from the previous one" : fromTripRequestId ? "Filling in vehicle, date, and auction duration to convert this request into an auction" : "Create an auction for drivers to bid on"}
       />
+
+      {fromTripRequestId && tripRequestQuery.data && (
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardContent className="p-3 text-sm text-gray-800">
+            <p className="font-medium text-blue-900">
+              From trip request {tripRequestQuery.data.request_number}
+            </p>
+            <p className="mt-1 text-gray-700">
+              <span className="text-gray-500">Pickup:</span> {tripRequestQuery.data.pickup_address}
+              {tripRequestQuery.data.pickup_city ? ` · ${tripRequestQuery.data.pickup_city}` : ""}
+            </p>
+            <p className="text-gray-700">
+              <span className="text-gray-500">Delivery:</span> {tripRequestQuery.data.delivery_address}
+              {tripRequestQuery.data.delivery_city ? ` · ${tripRequestQuery.data.delivery_city}` : ""}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Cargo + contacts have been prefilled. Set pickup/delivery via the picker below and submit to create the auction; the request will be linked automatically.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-4 sm:p-6">
