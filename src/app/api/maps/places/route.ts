@@ -11,7 +11,9 @@ export const dynamic = "force-dynamic";
 const MIN_SEARCH_CHARS = 5;
 const MAX_SEARCH_CHARS = 120;
 const PREDICTION_LIMIT = 5;
-const PLACES_CACHE_TTL_MS = 60_000;
+// Autocomplete predictions are stable across a day — 24h cache cuts repeat
+// keystroke storms across multiple sessions without staleness risk.
+const PLACES_CACHE_TTL_MS = 24 * 60 * 60_000;
 const UUID_LIKE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MEANINGFUL_QUERY_RE = /[\p{L}\p{N}]/u;
 const placesCache = new Map<string, { expiresAt: number; predictions: Array<{

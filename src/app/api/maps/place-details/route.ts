@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 
 const MAX_PLACE_ID_LENGTH = 200;
 const PLACE_ID_RE = /^[A-Za-z0-9_-]+$/;
-const PLACE_DETAILS_CACHE_TTL_MS = 10 * 60_000;
+// Place details (lat/lng/components for a given place_id) don't change in
+// practice — 24h cache; the place_id itself is the invalidation key.
+const PLACE_DETAILS_CACHE_TTL_MS = 24 * 60 * 60_000;
 const placeDetailsCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 interface AddressComponent {
