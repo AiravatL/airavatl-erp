@@ -18,10 +18,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { listAuctionConsigners } from "@/lib/api/delivery-requests";
-import type { AuctionConsigner, PlaceDetails } from "@/lib/api/delivery-requests";
-import { createTripRequest } from "@/lib/api/trip-requests";
-import { queryKeys } from "@/lib/query/keys";
+import type { PlaceDetails } from "@/lib/api/delivery-requests";
+import {
+  createTripRequest,
+  listTripRequestConsigners,
+} from "@/lib/api/trip-requests";
+import type { TripRequestConsigner } from "@/lib/api/trip-requests";
 import { CARGO_TYPE_LABELS } from "@/lib/types";
 import type { CargoType } from "@/lib/types";
 import { LocationPicker } from "./location-picker";
@@ -39,7 +41,7 @@ export default function NewTripRequestPage() {
   const sessionToken = useMemo(() => crypto.randomUUID(), []);
 
   const [consignerId, setConsignerId] = useState("");
-  const [selectedConsigner, setSelectedConsigner] = useState<AuctionConsigner | null>(null);
+  const [selectedConsigner, setSelectedConsigner] = useState<TripRequestConsigner | null>(null);
   const [consignerSearch, setConsignerSearch] = useState("");
   const [debouncedConsignerSearch, setDebouncedConsignerSearch] = useState("");
   const [showConsignerDropdown, setShowConsignerDropdown] = useState(false);
@@ -54,8 +56,8 @@ export default function NewTripRequestPage() {
   }, []);
 
   const consignersQuery = useQuery({
-    queryKey: queryKeys.deliveryRequestConsigners(debouncedConsignerSearch),
-    queryFn: () => listAuctionConsigners(debouncedConsignerSearch || undefined),
+    queryKey: ["trip-request-consigners", debouncedConsignerSearch] as const,
+    queryFn: () => listTripRequestConsigners(debouncedConsignerSearch || undefined),
     enabled: showConsignerDropdown,
   });
   const consigners = consignersQuery.data?.items ?? [];

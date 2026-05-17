@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isMissingRpcError } from "@/lib/supabase/rpc";
 import {
   requireTripRequestActor,
+  TRIP_REQUEST_ADMIN_ROLES,
   mapTripRequestRpcError,
 } from "@/app/api/trip-requests/_shared";
 
@@ -48,4 +49,37 @@ export async function GET(
   }
 
   return NextResponse.json({ ok: true, data: row });
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ requestId: string }> },
+) {
+  const actorResult = await requireTripRequestActor(TRIP_REQUEST_ADMIN_ROLES);
+  if ("error" in actorResult) return actorResult.error;
+
+  const { requestId } = await params;
+  if (!requestId) {
+    return NextResponse.json({ ok: false, message: "requestId is required" }, { status: 400 });
+  }
+
+  const { error: rpcError } = await actorResult.supabase.rpc(
+    "trip_request_delete_v1",
+    {
+      p_actor_user_id: actorResult.actor.id,
+      p_id: requestId,
+    } as never,
+  );
+
+  if (rpcError) {
+    if (isMissingRpcError(rpcError)) {
+      return NextResponse.json(
+        { ok: false, message: "Missing RPC: trip_request_delete_v1" },
+        { status: 500 },
+      );
+    }
+    return mapTripRequestRpcError(rpcError.message ?? "Unable to delete trip request", rpcError.code);
+  }
+
+  return NextResponse.json({ ok: true, data: { id: requestId, deleted: true } });
 }

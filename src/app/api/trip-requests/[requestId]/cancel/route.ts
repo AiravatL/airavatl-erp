@@ -22,28 +22,16 @@ export async function POST(
   const body = (await request.json().catch(() => null)) as { reason?: string } | null;
   const reason = body?.reason?.trim() || null;
 
-  // sales_consigner can only cancel their own request; fetch detail to verify.
-  if (actorResult.actor.role === "sales_consigner") {
-    const { data: row, error: detailErr } = await actorResult.supabase.rpc(
-      "trip_request_detail_v1",
-      { p_id: requestId } as never,
-    );
-    if (detailErr) {
-      return mapTripRequestRpcError(detailErr.message ?? "Unable to verify ownership", detailErr.code);
-    }
-    const rowObj = row as Record<string, unknown> | null;
-    if (!rowObj) {
-      return NextResponse.json({ ok: false, message: "Trip request not found" }, { status: 404 });
-    }
-    if (rowObj.created_by !== actorResult.actor.id) {
-      return NextResponse.json({ ok: false, message: "Forbidden" }, { status: 403 });
-    }
-  }
+  // sales_consigner can only cancel their own request; the RPC enforces this
+  // inline via p_only_if_created_by so we avoid a second roundtrip.
+  const onlyIfCreatedBy =
+    actorResult.actor.role === "sales_consigner" ? actorResult.actor.id : null;
 
   const { error: rpcError } = await actorResult.supabase.rpc("trip_request_cancel_v1", {
     p_actor_user_id: actorResult.actor.id,
     p_id: requestId,
     p_reason: reason,
+    p_only_if_created_by: onlyIfCreatedBy,
   } as never);
 
   if (rpcError) {

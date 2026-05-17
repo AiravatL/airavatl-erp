@@ -14,14 +14,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  getTripRequest, rejectTripRequest, cancelTripRequest,
+  getTripRequest, rejectTripRequest, cancelTripRequest, deleteTripRequest,
 } from "@/lib/api/trip-requests";
 import type { TripRequestDetail, TripRequestStatus } from "@/lib/api/trip-requests";
 import { queryKeys } from "@/lib/query/keys";
 import { useAuth } from "@/lib/auth/auth-context";
 import { formatDate } from "@/lib/formatters";
 import {
-  ArrowLeft, Loader2, CheckCircle2, XCircle, Ban, ExternalLink,
+  ArrowLeft, Loader2, CheckCircle2, XCircle, Ban, ExternalLink, Trash2,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<TripRequestStatus, string> = {
@@ -55,6 +55,7 @@ export default function TripRequestDetailPage({
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [actionError, setActionError] = useState("");
 
@@ -80,6 +81,16 @@ export default function TripRequestDetailPage({
       setActionError(err instanceof Error ? err.message : "Failed to cancel"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTripRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trip-requests"] });
+      router.push("/trip-requests");
+    },
+    onError: (err) =>
+      setActionError(err instanceof Error ? err.message : "Failed to delete"),
+  });
+
   if (detailQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -102,13 +113,15 @@ export default function TripRequestDetailPage({
 
   const req = detailQuery.data;
   const role = user?.role;
-  const isOps = role === "super_admin" || role === "admin" || role === "operations";
+  const isAdmin = role === "super_admin" || role === "admin";
+  const isOps = isAdmin || role === "operations";
   const isCreator = req.created_by === user?.id;
   const isPending = req.status === "pending_review";
 
   const canAccept = isOps && isPending;
   const canReject = isOps && isPending;
   const canCancel = isPending && (isCreator || isOps);
+  const canDelete = isAdmin && req.status !== "converted";
 
   return (
     <div className="space-y-4">
@@ -177,6 +190,13 @@ export default function TripRequestDetailPage({
                   <Ban className="h-4 w-4 mr-1.5" /> Cancel
                 </Button>
               )}
+              {canDelete && (
+                <Button variant="outline"
+                  onClick={() => { setDeleteOpen(true); setActionError(""); }}
+                  className="h-9 text-sm text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                  <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -205,6 +225,36 @@ export default function TripRequestDetailPage({
             >
               {rejectMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null}
               Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete dialog */}
+      <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) setActionError(""); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Permanently delete this trip request?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm text-gray-700">
+            <p>
+              Request <span className="font-medium">{req.request_number}</span> will be removed
+              completely. This cannot be undone.
+            </p>
+            <p className="text-xs text-gray-500">
+              Converted requests can&apos;t be deleted — their linked auction preserves the audit trail.
+            </p>
+            {actionError && <p className="text-sm text-red-600">{actionError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Keep</Button>
+            <Button
+              variant="destructive"
+              onClick={() => { setActionError(""); deleteMutation.mutate(); }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null}
+              Delete permanently
             </Button>
           </DialogFooter>
         </DialogContent>

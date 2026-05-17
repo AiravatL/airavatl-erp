@@ -128,6 +128,7 @@ export default function TripRequestsPage() {
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Route</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Cargo</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">Created by</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-500">Created</th>
                     </tr>
@@ -179,6 +180,9 @@ function TripRequestRow({ item }: { item: TripRequestListItem }) {
       <td className="px-4 py-3 text-gray-600 truncate max-w-[200px]" title={item.cargo_description}>
         {item.cargo_description}
       </td>
+      <td className="px-4 py-3 text-gray-600 truncate max-w-[160px]" title={item.created_by_name ?? ""}>
+        {item.created_by_name ?? "—"}
+      </td>
       <td className="px-4 py-3">
         <Badge variant="outline" className={`border-0 text-xs font-medium ${STATUS_COLORS[item.status]}`}>
           {STATUS_LABELS[item.status]}
@@ -202,12 +206,18 @@ function TripRequestCard({ item }: { item: TripRequestListItem }) {
         <p className="text-sm text-gray-700">
           {item.pickup_city ?? item.pickup_address} → {item.delivery_city ?? item.delivery_address}
         </p>
-        <div className="flex gap-2 text-xs text-gray-500 mt-1">
+        <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
           <span>{item.source === "enterprise_portal" ? "Portal" : "Sales"}</span>
           {item.consigner_display && (
             <>
               <span>·</span>
               <span className="truncate">{item.consigner_display}</span>
+            </>
+          )}
+          {item.created_by_name && (
+            <>
+              <span>·</span>
+              <span className="truncate">by {item.created_by_name}</span>
             </>
           )}
         </div>

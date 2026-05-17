@@ -15,6 +15,11 @@ export const TRIP_REQUEST_OPS_ROLES: Role[] = [
   "operations",
 ];
 
+export const TRIP_REQUEST_ADMIN_ROLES: Role[] = [
+  "super_admin",
+  "admin",
+];
+
 export async function requireTripRequestActor(allowedRoles: Role[] = TRIP_REQUEST_VIEW_ROLES) {
   const actorResult = await requireServerActor(allowedRoles);
   if ("error" in actorResult) return actorResult;
@@ -43,6 +48,12 @@ export function mapTripRequestRpcError(message: string, code?: string) {
   if (message?.includes("not_linkable")) {
     return NextResponse.json(
       { ok: false, message: "Only pending requests can be linked to an auction" },
+      { status: 400 },
+    );
+  }
+  if (message?.includes("not_deletable")) {
+    return NextResponse.json(
+      { ok: false, message: "Converted requests cannot be deleted (linked auction preserves audit trail)" },
       { status: 400 },
     );
   }

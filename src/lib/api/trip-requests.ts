@@ -3,6 +3,28 @@ import { apiRequest } from "@/lib/api/http";
 export type TripRequestStatus = "pending_review" | "converted" | "rejected" | "cancelled";
 export type TripRequestSource = "enterprise_portal" | "erp_sales";
 
+export interface TripRequestConsigner {
+  consignerId: string;
+  displayName: string;
+  phone: string;
+  contactName: string;
+  businessName: string;
+  salesOwnerId: string;
+  salesOwnerName: string;
+}
+
+export async function listTripRequestConsigners(
+  search?: string,
+): Promise<{ items: TripRequestConsigner[] }> {
+  const sp = new URLSearchParams();
+  if (search) sp.set("search", search);
+  const qs = sp.toString();
+  return apiRequest<{ items: TripRequestConsigner[] }>(
+    `/api/trip-requests/consigners${qs ? `?${qs}` : ""}`,
+    { method: "GET", cache: "no-store" },
+  );
+}
+
 export interface TripRequestListItem {
   id: string;
   request_number: string;
@@ -20,6 +42,8 @@ export interface TripRequestListItem {
   cargo_description: string;
   preferred_pickup_at: string | null;
   created_by: string;
+  created_by_name: string | null;
+  created_by_role: string | null;
   delivery_request_id: string | null;
   created_at: string;
   updated_at: string;
@@ -165,5 +189,12 @@ export async function linkTripRequestToAuction(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ deliveryRequestId }),
     },
+  );
+}
+
+export async function deleteTripRequest(id: string): Promise<void> {
+  await apiRequest<{ id: string; deleted: true }>(
+    `/api/trip-requests/${id}`,
+    { method: "DELETE" },
   );
 }
