@@ -375,18 +375,18 @@ export default function AuctionDetailPage({
                           )}
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Status</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Time</th>
-                          {canSelectWinner && <th className="px-3 py-2 text-right font-medium text-gray-500">Action</th>}
+                          {isErpAuction && canSelectWinner && <th className="px-3 py-2 text-right font-medium text-gray-500">Action</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {bids.map((bid, idx) => (
                           <BidTableRow key={bid.id} bid={bid} rank={idx + 1}
-                            showActionColumn={canSelectWinner}
+                            showActionColumn={isErpAuction && canSelectWinner}
                             hideBidAmount={isOps && isErpAuction}
                             showTripAmounts={isErpAuction && canSelectWinner}
                             commissionPct={commissionPct}
                             minCommissionPct={minCommissionPct}
-                            canSelect={canSelectWinner && bid.status === "active"}
+                            canSelect={isErpAuction && canSelectWinner && bid.status === "active"}
                             onSelect={() => { setSelectedBid(bid); setStartTripOpen(true); }} />
                         ))}
                       </tbody>
@@ -400,7 +400,7 @@ export default function AuctionDetailPage({
                         showTripAmounts={isErpAuction && canSelectWinner}
                         commissionPct={commissionPct}
                         minCommissionPct={minCommissionPct}
-                        canSelect={canSelectWinner && bid.status === "active"}
+                        canSelect={isErpAuction && canSelectWinner && bid.status === "active"}
                         onSelect={() => { setSelectedBid(bid); setStartTripOpen(true); }} />
                     ))}
                   </div>
