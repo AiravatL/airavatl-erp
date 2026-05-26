@@ -29,6 +29,7 @@ import {
   type TransporterFleetEmployeeDriver,
   type PartnerPayoutStatus,
 } from "@/lib/api/verification";
+import { DevicePermissionsCard } from "@/app/(app)/fleet/user/[userId]/device-permissions-card";
 import type { VerificationDetails } from "@/lib/types";
 import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
 import { queryKeys } from "@/lib/query/keys";
@@ -231,6 +232,13 @@ export default function PartnerDetailPage() {
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingPayoutOnboarding });
           }}
         />
+      )}
+
+      {/* Device permissions — best-effort triage data from the partner app.
+          Renders for every driver/transporter; gracefully shows "no data yet"
+          if the partner hasn't synced from an updated build. */}
+      {(isDriver || isTransporter) && (
+        <DevicePermissionsCard userId={userId} />
       )}
 
       {/* Two-column layout */}

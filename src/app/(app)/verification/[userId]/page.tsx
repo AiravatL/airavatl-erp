@@ -43,7 +43,6 @@ import { queryKeys } from "@/lib/query/keys";
 import { formatDate } from "@/lib/formatters";
 import { useAuth } from "@/lib/auth/auth-context";
 import { DocumentUpload } from "@/app/(app)/verification/document-upload";
-import { DevicePermissionsCard } from "@/app/(app)/verification/[userId]/device-permissions-card";
 import {
   ArrowLeft, Phone, MapPin, Calendar, ShieldCheck, ShieldOff,
   Loader2, AlertTriangle, CheckCircle, Truck, Users, Wallet, RefreshCw,
@@ -421,13 +420,6 @@ export default function VerificationDetailPage() {
             </p>
           </div>
         )}
-
-      {/* Device permissions — best-effort triage data from the partner app.
-          Renders for every driver/transporter; gracefully shows "no data yet"
-          if the partner hasn't synced from an updated build. */}
-      {(isDriver || isTransporter) && (
-        <DevicePermissionsCard userId={userId} />
-      )}
 
       {/* Payout onboarding (only for verified partners) */}
       {isVerified && (
