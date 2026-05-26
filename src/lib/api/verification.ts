@@ -184,6 +184,37 @@ export async function getPartnerPayoutStatus(
   );
 }
 
+export type PermissionTri = "granted" | "denied" | "undetermined";
+export type OverlayPermission = PermissionTri | "not_applicable";
+
+export interface DriverPermissionState {
+  location_foreground?: PermissionTri;
+  location_background?: PermissionTri;
+  notifications?: PermissionTri;
+  overlay?: OverlayPermission;
+  battery_optimization_ignored?: boolean | null;
+}
+
+export type DriverDevicePermissions =
+  | { hasState: false }
+  | {
+      hasState: true;
+      state: DriverPermissionState;
+      checkpointVersion: number;
+      appVersion: string | null;
+      platform: string | null;
+      updatedAt: string;
+    };
+
+export async function getDriverDevicePermissions(
+  userId: string,
+): Promise<DriverDevicePermissions> {
+  return apiRequest<DriverDevicePermissions>(
+    `/api/verification/${userId}/device-permissions`,
+    { method: "GET", cache: "no-store" },
+  );
+}
+
 export async function listPendingPayoutOnboarding(): Promise<{
   items: PendingPayoutOnboardingItem[];
   total: number;

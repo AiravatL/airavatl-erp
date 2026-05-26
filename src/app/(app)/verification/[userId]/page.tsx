@@ -43,6 +43,7 @@ import { queryKeys } from "@/lib/query/keys";
 import { formatDate } from "@/lib/formatters";
 import { useAuth } from "@/lib/auth/auth-context";
 import { DocumentUpload } from "@/app/(app)/verification/document-upload";
+import { DevicePermissionsCard } from "@/app/(app)/verification/[userId]/device-permissions-card";
 import {
   ArrowLeft, Phone, MapPin, Calendar, ShieldCheck, ShieldOff,
   Loader2, AlertTriangle, CheckCircle, Truck, Users, Wallet, RefreshCw,
@@ -107,6 +108,7 @@ export default function VerificationDetailPage() {
   // Edit / Delete dialogs (admin only, unverified partners)
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showChangeRole, setShowChangeRole] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.verificationDetail(userId),
@@ -214,6 +216,7 @@ export default function VerificationDetailPage() {
     }) => updatePartnerProfile(userId, input),
     onSuccess: () => {
       setShowEdit(false);
+      setShowChangeRole(false);
       invalidateAll();
     },
   });
@@ -371,6 +374,18 @@ export default function VerificationDetailPage() {
           <Badge variant="outline" className={`border-0 text-xs ${TYPE_BADGE[detail.user.userType] ?? ""}`}>
             {TYPE_LABEL[detail.user.userType] ?? detail.user.userType}
           </Badge>
+          {canManageUnverified && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setShowChangeRole(true)}
+              title="Did the partner choose the wrong role at signup?"
+            >
+              <Pencil className="h-3 w-3 mr-1" />
+              Change role
+            </Button>
+          )}
           {isVerified && (
             <Badge variant="outline" className="border-0 text-xs bg-emerald-50 text-emerald-700">
               <CheckCircle className="h-3 w-3 mr-1" />
@@ -406,6 +421,13 @@ export default function VerificationDetailPage() {
             </p>
           </div>
         )}
+
+      {/* Device permissions — best-effort triage data from the partner app.
+          Renders for every driver/transporter; gracefully shows "no data yet"
+          if the partner hasn't synced from an updated build. */}
+      {(isDriver || isTransporter) && (
+        <DevicePermissionsCard userId={userId} />
+      )}
 
       {/* Payout onboarding (only for verified partners) */}
       {isVerified && (
@@ -874,6 +896,21 @@ export default function VerificationDetailPage() {
         onSubmit={(input) => editProfileMutation.mutate(input)}
       />
 
+      {/* Focused Change Role dialog (admin, unverified). Same backend as
+          EditPartnerInfoDialog but framed for the "wrong role at signup" case. */}
+      <ChangeRoleDialog
+        open={showChangeRole}
+        onOpenChange={setShowChangeRole}
+        currentUserType={detail.user.userType as DriverUserType}
+        isPending={editProfileMutation.isPending}
+        error={
+          editProfileMutation.error instanceof Error
+            ? editProfileMutation.error.message
+            : null
+        }
+        onSubmit={(userType) => editProfileMutation.mutate({ userType })}
+      />
+
       {/* Delete Partner Dialog (admin, unverified) */}
       <Dialog
         open={showDelete}
@@ -1235,6 +1272,99 @@ function EditPartnerInfoDialog({
           >
             {isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
             Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Focused dialog for "the partner picked the wrong role at signup" — the
+// most common reason ops needs the role swap. Calls the same PUT route as
+// EditPartnerInfoDialog with just { userType } in the payload. The same
+// backend guards apply (verified / has bids|trips|payments → 400).
+function ChangeRoleDialog({
+  open,
+  onOpenChange,
+  currentUserType,
+  isPending,
+  error,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentUserType: DriverUserType;
+  isPending: boolean;
+  error: string | null;
+  onSubmit: (userType: DriverUserType) => void;
+}) {
+  const [userType, setUserType] = useState<DriverUserType>(currentUserType);
+
+  useEffect(() => {
+    if (open) setUserType(currentUserType);
+  }, [open, currentUserType]);
+
+  const dirty = userType !== currentUserType;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change Partner Role</DialogTitle>
+          <DialogDescription>
+            Use this if the partner picked the wrong role when signing up in the
+            partner app (e.g. signed up as Individual Driver but is actually a
+            Transporter).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Current role</Label>
+            <Badge
+              variant="outline"
+              className={`border-0 text-xs ${TYPE_BADGE[currentUserType] ?? ""}`}
+            >
+              {TYPE_LABEL[currentUserType] ?? currentUserType}
+            </Badge>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Change to</Label>
+            <Select value={userType} onValueChange={(v) => setUserType(v as DriverUserType)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="individual_driver">Individual Driver</SelectItem>
+                <SelectItem value="transporter">Transporter</SelectItem>
+                <SelectItem value="employee_driver">Employee Driver</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-md bg-amber-50 p-3 text-xs text-amber-800">
+            <p className="font-medium">Heads up:</p>
+            <ul className="mt-1 list-disc list-inside space-y-0.5">
+              <li>Only allowed before verification — revoke first if already verified.</li>
+              <li>Blocked if the partner has any bids, trips, or payments on record.</li>
+              <li>
+                Switching role clears the old role&apos;s verification documents and
+                payout settings. The partner will need to upload docs again for
+                the new role.
+              </li>
+            </ul>
+          </div>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={!dirty || isPending}
+            onClick={() => onSubmit(userType)}
+          >
+            {isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+            Change role
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -50,6 +50,8 @@ export const queryKeys = {
   verificationDetail: (userId: string) => ["verification", "detail", userId] as const,
   partnerPayoutStatus: (userId: string) =>
     ["verification", "payout-status", userId] as const,
+  driverDevicePermissions: (userId: string) =>
+    ["verification", "device-permissions", userId] as const,
   pendingPayoutOnboarding: ["verification", "pending-payout-onboarding"] as const,
   transporterFleet: (userId: string) => ["verification", "transporter-fleet", userId] as const,
   vehicleVerification: (vehicleId: string) => ["verification", "vehicle", vehicleId] as const,
