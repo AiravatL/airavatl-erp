@@ -59,7 +59,10 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ userId: string }> },
 ) {
-  const actorResult = await requireVerificationActor(["super_admin", "admin"]);
+  // Edit-info and role swap are part of the verification workflow, so the
+  // vehicle-sales team that runs verification can do them too. Uses the
+  // default VERIFICATION_ALLOWED_ROLES (super_admin/admin/sales_vehicles).
+  const actorResult = await requireVerificationActor();
   if ("error" in actorResult) return actorResult.error;
 
   const { userId } = await params;

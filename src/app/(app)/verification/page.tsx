@@ -134,6 +134,8 @@ export default function VerificationPendingPage() {
   } | null>(null);
 
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+  // Vehicle sales runs verification → can edit info / swap role; delete is admin-only.
+  const isVerifier = isAdmin || user?.role === "sales_vehicles";
 
   const editMutation = useMutation({
     mutationFn: (input: {
@@ -353,7 +355,7 @@ export default function VerificationPendingPage() {
                           <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-[120px]">
                             Added
                           </th>
-                          {isAdmin && (
+                          {isVerifier && (
                             <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 w-[60px]">
                               {""}
                             </th>
@@ -391,7 +393,7 @@ export default function VerificationPendingPage() {
                               <td className="px-4 py-3 text-xs text-gray-500">
                                 {timeAgo(p.createdAt)}
                               </td>
-                              {isAdmin && (
+                              {isVerifier && (
                                 <td className="px-4 py-3 text-right">
                                   {isPartnerRow ? (
                                     <DropdownMenu>
@@ -421,15 +423,17 @@ export default function VerificationPendingPage() {
                                           <Pencil className="h-3.5 w-3.5 mr-2" />
                                           Edit
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          className="text-red-600 focus:text-red-700 focus:bg-red-50"
-                                          onClick={() =>
-                                            setDeleteTarget({ id: p.id, title: p.title })
-                                          }
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                          Delete
-                                        </DropdownMenuItem>
+                                        {isAdmin && (
+                                          <DropdownMenuItem
+                                            className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                                            onClick={() =>
+                                              setDeleteTarget({ id: p.id, title: p.title })
+                                            }
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        )}
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   ) : null}

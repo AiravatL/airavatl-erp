@@ -234,8 +234,12 @@ export default function VerificationDetailPage() {
   const isTransporter = detail?.user.userType === "transporter";
   const isVerified = detail?.user.isVerified;
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
+  // Vehicle sales runs verification, so they can also fix wrong info / swap a
+  // mis-chosen role on unverified partners — but deletion/revoke stay admin-only.
+  const isVerifier = isAdmin || user?.role === "sales_vehicles";
   const canRevoke = isAdmin && isVerified;
   const canManageUnverified = isAdmin && isVerified === false;
+  const canEditUnverified = isVerifier && isVerified === false;
   const currentRegNumber = regNumber ?? detail?.vehicle?.registrationNumber ?? "";
   const currentVehicleMasterTypeId =
     vehicleMasterTypeId ?? detail?.vehicle?.vehicleMasterTypeId ?? "";
@@ -330,27 +334,27 @@ export default function VerificationDetailPage() {
           Back to Pending
         </Link>
         <div className="flex items-center gap-2">
+          {canEditUnverified && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => setShowEdit(true)}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Edit Info
+            </Button>
+          )}
           {canManageUnverified && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => setShowEdit(true)}
-              >
-                <Pencil className="h-3.5 w-3.5 mr-1" />
-                Edit Info
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs border-red-200 text-red-700 hover:bg-red-50"
-                onClick={() => setShowDelete(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
-                Delete Partner
-              </Button>
-            </>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs border-red-200 text-red-700 hover:bg-red-50"
+              onClick={() => setShowDelete(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Delete Partner
+            </Button>
           )}
           {canRevoke && (
             <Button
@@ -373,7 +377,7 @@ export default function VerificationDetailPage() {
           <Badge variant="outline" className={`border-0 text-xs ${TYPE_BADGE[detail.user.userType] ?? ""}`}>
             {TYPE_LABEL[detail.user.userType] ?? detail.user.userType}
           </Badge>
-          {canManageUnverified && (
+          {canEditUnverified && (
             <Button
               size="sm"
               variant="outline"
