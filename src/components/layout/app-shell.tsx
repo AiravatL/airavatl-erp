@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { Sidebar } from "./sidebar";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { PageHeaderProvider, usePageHeaderInfo } from "./page-header-context";
 import { useAuth } from "@/lib/auth/auth-context";
 import { ROLE_LABELS } from "@/lib/auth/roles";
@@ -31,6 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <PageHeaderProvider>
       <div className="flex h-screen flex-col bg-gray-50">
+        <InstallPrompt />
         <TopBar
           onOpenMobileSidebar={() => setSidebarOpen(true)}
           onToggleCollapse={() => setSidebarCollapsed((current) => !current)}

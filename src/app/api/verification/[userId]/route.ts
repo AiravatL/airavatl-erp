@@ -259,13 +259,42 @@ export async function DELETE(
     );
   }
 
-  // Refuse if any operational activity exists.
+  // IMPORTANT mapping: auction_bids.bidder_id and trips.driver_id /
+  // delivery_requests.consigner_id reference the partner's ROLE-SPECIFIC row id
+  // (individual_drivers.id / transporters.id / consigners.id) — NOT
+  // user_profiles.id. Checking them against userId silently misses all activity
+  // and previously let deletes orphan bids on live auctions. Resolve the
+  // role-specific ids first, then guard against them.
+  const [driverRow, transporterRow, consignerRow] = await Promise.all([
+    adminClient.from("individual_drivers").select("id").eq("user_id", userId).maybeSingle(),
+    adminClient.from("transporters").select("id").eq("user_id", userId).maybeSingle(),
+    adminClient.from("consigners").select("id").eq("user_id", userId).maybeSingle(),
+  ]);
+  const driverId = (driverRow.data as { id: string } | null)?.id ?? null;
+  const transporterId = (transporterRow.data as { id: string } | null)?.id ?? null;
+  const consignerId = (consignerRow.data as { id: string } | null)?.id ?? null;
+  const bidderIds = [driverId, transporterId].filter(Boolean) as string[];
+
+  // Build the trips OR-filter only from the ids that actually exist.
+  const tripOrParts: string[] = [];
+  if (bidderIds.length) {
+    const list = `(${bidderIds.join(",")})`;
+    tripOrParts.push(`driver_id.in.${list}`, `assigned_driver_id.in.${list}`);
+  }
+  if (consignerId) tripOrParts.push(`consigner_id.eq.${consignerId}`);
+
+  const ZERO = Promise.resolve({ count: 0 } as { count: number | null });
   const [bids, trips, payments, deliveries] = await Promise.all([
-    adminClient.from("auction_bids").select("id", { count: "exact", head: true }).eq("bidder_id", userId),
-    adminClient.from("trips").select("id", { count: "exact", head: true })
-      .or(`driver_id.eq.${userId},assigned_driver_id.eq.${userId},consigner_id.eq.${userId}`),
+    bidderIds.length
+      ? adminClient.from("auction_bids").select("id", { count: "exact", head: true }).in("bidder_id", bidderIds)
+      : ZERO,
+    tripOrParts.length
+      ? adminClient.from("trips").select("id", { count: "exact", head: true }).or(tripOrParts.join(","))
+      : ZERO,
     adminClient.from("trip_driver_payments").select("id", { count: "exact", head: true }).eq("driver_user_id", userId),
-    adminClient.from("delivery_requests").select("id", { count: "exact", head: true }).eq("consigner_id", userId),
+    consignerId
+      ? adminClient.from("delivery_requests").select("id", { count: "exact", head: true }).eq("consigner_id", consignerId)
+      : ZERO,
   ]);
   if (
     (bids.count ?? 0) > 0 ||
@@ -276,7 +305,9 @@ export async function DELETE(
     return NextResponse.json(
       {
         ok: false,
-        message: "Cannot delete: partner has bids, trips, deliveries, or payments on record.",
+        message:
+          "Cannot delete: partner has bids, trips, deliveries, or payments on record. " +
+          "Resolve those (e.g. via Operations) before deleting.",
       },
       { status: 400 },
     );
