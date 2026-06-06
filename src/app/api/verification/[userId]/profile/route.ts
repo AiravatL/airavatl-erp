@@ -146,6 +146,34 @@ export async function PUT(
     // 1) Drop the old type-specific row (if any).
     if (oldType in TYPE_TABLE) {
       const oldTable = TYPE_TABLE[oldType as DriverUserType];
+
+      // Release any vehicles owned by the OLD role row first. vehicles.owner_id
+      // has no FK, so deleting the role row alone would orphan its vehicles and
+      // strand their registration numbers — which then throws
+      // "vehicle_registration_in_use" when the partner re-verifies under the new
+      // role (or anyone re-registers that plate).
+      if (oldType === "individual_driver" || oldType === "transporter") {
+        const { data: oldRoleRow } = await adminClient
+          .from(oldTable)
+          .select("id")
+          .eq("user_id", userId)
+          .maybeSingle();
+        const oldRoleId = (oldRoleRow as { id: string } | null)?.id ?? null;
+        if (oldRoleId) {
+          const { error: vehDelErr } = await adminClient
+            .from("vehicles")
+            .delete()
+            .eq("owner_type", oldType)
+            .eq("owner_id", oldRoleId);
+          if (vehDelErr) {
+            return NextResponse.json(
+              { ok: false, message: `Failed to release old role's vehicles: ${vehDelErr.message}` },
+              { status: 500 },
+            );
+          }
+        }
+      }
+
       const { error: delErr } = await adminClient
         .from(oldTable)
         .delete()

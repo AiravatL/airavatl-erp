@@ -29,6 +29,8 @@ export function mapRpcError(message: string, code?: string) {
     return NextResponse.json({ ok: false, message: "Invalid user type for this operation" }, { status: 400 });
   if (message?.includes("duplicate_registration"))
     return NextResponse.json({ ok: false, message: "A vehicle with this registration number already exists for a different owner" }, { status: 409 });
+  if (message?.includes("vehicle_registration_in_use"))
+    return NextResponse.json({ ok: false, message: "This vehicle registration is already in use by another partner" }, { status: 409 });
   if (code === "P0002")
     return NextResponse.json({ ok: false, message }, { status: 404 });
   if (code === "42501")
