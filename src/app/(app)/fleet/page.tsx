@@ -67,6 +67,10 @@ const driverColumns = [
     header: "Docs Status",
     cell: (info) => <DocsBadge verified={info.getValue()} />,
   }),
+  driverCol.accessor("verifiedByName", {
+    header: "Verified By",
+    cell: (info) => <VerifiedByCell name={info.getValue()} />,
+  }),
 ];
 
 const transporterCol = createColumnHelper<AppUser>();
@@ -107,6 +111,10 @@ const transporterColumns = [
     header: "Docs Status",
     cell: (info) => <DocsBadge verified={info.getValue()} />,
   }),
+  transporterCol.accessor("verifiedByName", {
+    header: "Verified By",
+    cell: (info) => <VerifiedByCell name={info.getValue()} />,
+  }),
 ];
 
 /* ---------- Page ---------- */
@@ -116,14 +124,18 @@ export default function FleetPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<FleetTab>("drivers");
 
+  // Fleet only lists verified partners — unverified ones live on the
+  // Verification page until they're approved.
   const driverFilters = {
     userType: "individual_driver",
     search: search || undefined,
+    isVerified: true,
     limit: 200,
   };
   const transporterFilters = {
     userType: "transporter",
     search: search || undefined,
+    isVerified: true,
     limit: 200,
   };
 
@@ -246,6 +258,11 @@ export default function FleetPage() {
                             {d.vehicleNumber} &middot; {d.vehicleType}
                           </p>
                         )}
+                        {d.verifiedByName && (
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            Verified by {d.verifiedByName}
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                   </Link>
@@ -283,6 +300,11 @@ export default function FleetPage() {
                           </div>
                           <DocsBadge verified={t.documentsVerified} />
                         </div>
+                        {t.verifiedByName && (
+                          <p className="text-[11px] text-gray-400 mt-1.5">
+                            Verified by {t.verifiedByName}
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                   </Link>
@@ -327,6 +349,11 @@ function DataTable<T>({ table }: { table: ReturnType<typeof useReactTable<T>> })
       </TableBody>
     </Table>
   );
+}
+
+function VerifiedByCell({ name }: { name: string | null }) {
+  if (!name) return <span className="text-gray-300">—</span>;
+  return <span className="text-gray-600">{name}</span>;
 }
 
 function DocsBadge({ verified }: { verified: boolean | null }) {

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -69,6 +70,15 @@ const KIND_LABEL: Record<PendingVerificationKind, string> = {
   vehicle: "Vehicle",
 };
 
+function TabCount({ n }: { n: number | undefined }) {
+  if (n === undefined) return null;
+  return (
+    <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-gray-200 px-1 text-[10px] font-semibold leading-none text-gray-700 py-0.5">
+      {n}
+    </span>
+  );
+}
+
 function formatPhone(phone: string | null | undefined) {
   if (!phone) return "";
   const digits = phone.replace(/^91/, "");
@@ -121,7 +131,7 @@ export default function VerificationPendingPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [kindFilter, setKindFilter] = useState<string>("all");
+  const [kindFilter, setKindFilter] = useState<string>("individual_driver");
   const [editTarget, setEditTarget] = useState<{
     id: string;
     title: string;
@@ -167,14 +177,14 @@ export default function VerificationPendingPage() {
 
   const pendingQuery = useQuery({
     queryKey: queryKeys.verificationPending({
-      userType: kindFilter === "all" ? undefined : kindFilter,
+      userType: kindFilter,
       search: search || undefined,
       limit: 50,
       offset: 0,
     }),
     queryFn: () =>
       listPendingVerifications({
-        userType: kindFilter === "all" ? undefined : kindFilter,
+        userType: kindFilter,
         search: search || undefined,
         limit: 50,
         offset: 0,
@@ -182,6 +192,25 @@ export default function VerificationPendingPage() {
     enabled: !!user,
   });
 
+  // Per-type counts are only correct when fetched unfiltered (the RPC zeroes
+  // the other types when p_user_type is set), so the tab badges + stat cards
+  // read from a dedicated all-types query that still respects search.
+  const countsQuery = useQuery({
+    queryKey: queryKeys.verificationPending({
+      search: search || undefined,
+      limit: 1,
+      offset: 0,
+    }),
+    queryFn: () =>
+      listPendingVerifications({
+        search: search || undefined,
+        limit: 1,
+        offset: 0,
+      }),
+    enabled: !!user,
+  });
+
+  const counts = countsQuery.data;
   const data = pendingQuery.data;
   const items = data?.items ?? [];
   const canAddPartner =
@@ -214,7 +243,7 @@ export default function VerificationPendingPage() {
             </div>
             <div>
               <p className="text-xs text-gray-500">Total Pending</p>
-              <p className="text-lg font-semibold text-gray-900">{data?.total ?? "—"}</p>
+              <p className="text-lg font-semibold text-gray-900">{counts?.total ?? "—"}</p>
             </div>
           </CardContent>
         </Card>
@@ -226,7 +255,7 @@ export default function VerificationPendingPage() {
             <div>
               <p className="text-xs text-gray-500">Individual</p>
               <p className="text-lg font-semibold text-gray-900">
-                {data?.individualDriverCount ?? "—"}
+                {counts?.individualDriverCount ?? "—"}
               </p>
             </div>
           </CardContent>
@@ -239,7 +268,7 @@ export default function VerificationPendingPage() {
             <div>
               <p className="text-xs text-gray-500">Transporters</p>
               <p className="text-lg font-semibold text-gray-900">
-                {data?.transporterCount ?? "—"}
+                {counts?.transporterCount ?? "—"}
               </p>
             </div>
           </CardContent>
@@ -252,7 +281,7 @@ export default function VerificationPendingPage() {
             <div>
               <p className="text-xs text-gray-500">Employees</p>
               <p className="text-lg font-semibold text-gray-900">
-                {data?.employeeDriverCount ?? "—"}
+                {counts?.employeeDriverCount ?? "—"}
               </p>
             </div>
           </CardContent>
@@ -265,37 +294,45 @@ export default function VerificationPendingPage() {
             <div>
               <p className="text-xs text-gray-500">Vehicles</p>
               <p className="text-lg font-semibold text-gray-900">
-                {data?.vehicleCount ?? "—"}
+                {counts?.vehicleCount ?? "—"}
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-          <Input
-            placeholder="Search by name, phone or registration..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-8 pl-8 text-sm"
-            maxLength={100}
-          />
-        </div>
-        <Select value={kindFilter} onValueChange={setKindFilter}>
-          <SelectTrigger className="w-[200px] h-8 text-sm">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="individual_driver">Individual Driver</SelectItem>
-            <SelectItem value="transporter">Transporter</SelectItem>
-            <SelectItem value="employee_driver">Employee Driver</SelectItem>
-            <SelectItem value="vehicle">Vehicle</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Type tabs — badge shows the unverified count per type */}
+      <Tabs value={kindFilter} onValueChange={setKindFilter}>
+        <TabsList className="bg-gray-100 h-8">
+          <TabsTrigger value="individual_driver" className="text-xs h-7 gap-1.5 data-[state=active]:bg-white">
+            Individual
+            <TabCount n={counts?.individualDriverCount} />
+          </TabsTrigger>
+          <TabsTrigger value="transporter" className="text-xs h-7 gap-1.5 data-[state=active]:bg-white">
+            Transporter
+            <TabCount n={counts?.transporterCount} />
+          </TabsTrigger>
+          <TabsTrigger value="employee_driver" className="text-xs h-7 gap-1.5 data-[state=active]:bg-white">
+            Employee
+            <TabCount n={counts?.employeeDriverCount} />
+          </TabsTrigger>
+          <TabsTrigger value="vehicle" className="text-xs h-7 gap-1.5 data-[state=active]:bg-white">
+            Vehicle
+            <TabCount n={counts?.vehicleCount} />
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+        <Input
+          placeholder="Search by name, phone or registration..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 pl-8 text-sm"
+          maxLength={100}
+        />
       </div>
 
       {pendingQuery.isLoading && (

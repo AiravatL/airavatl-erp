@@ -19,6 +19,8 @@ interface RpcItem {
   account_id: string | null;
   account_name: string | null;
   documents_verified: boolean | null;
+  verified_at: string | null;
+  verified_by_name: string | null;
   vehicle_number: string | null;
   vehicle_type: string | null;
   vehicle_count: number | null;
@@ -93,6 +95,8 @@ export async function GET(request: Request) {
         accountId: row.account_id,
         accountName: row.account_name,
         documentsVerified: row.documents_verified,
+        verifiedAt: row.verified_at ?? null,
+        verifiedByName: row.verified_by_name ?? null,
         vehicleNumber: row.vehicle_number ?? null,
         vehicleType: row.vehicle_type ?? null,
         vehicleCount: row.vehicle_count ?? null,

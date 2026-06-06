@@ -15,6 +15,8 @@ export interface AppUser {
   accountId: string | null;
   accountName: string | null;
   documentsVerified: boolean | null;
+  verifiedAt: string | null;
+  verifiedByName: string | null;
   vehicleNumber: string | null;
   vehicleType: string | null;
   vehicleCount: number | null;
