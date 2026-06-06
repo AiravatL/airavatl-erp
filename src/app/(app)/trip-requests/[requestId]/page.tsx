@@ -100,7 +100,7 @@ export default function TripRequestDetailPage({
   }
   if (detailQuery.error || !detailQuery.data) {
     return (
-      <div className="space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         <Button variant="ghost" size="sm" onClick={() => router.push("/trip-requests")} className="h-8 text-sm">
           <ArrowLeft className="h-4 w-4 mr-1.5" /> Back
         </Button>
@@ -124,7 +124,7 @@ export default function TripRequestDetailPage({
   const canDelete = isAdmin && req.status !== "converted";
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title={`Trip Request ${req.request_number}`}>
         <Button variant="ghost" size="sm" onClick={() => router.push("/trip-requests")} className="h-8 text-sm">
           <ArrowLeft className="h-4 w-4 mr-1.5" /> Back

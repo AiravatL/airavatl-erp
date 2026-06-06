@@ -216,7 +216,7 @@ export default function RateReviewPage() {
   const reviewError = reviewRatesQuery.error instanceof Error ? reviewRatesQuery.error.message : null;
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Rate Review"
         description={canDecideRates ? "Review submitted market rates" : "Track submitted market rates"}

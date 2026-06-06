@@ -114,7 +114,7 @@ export default function DeliveryRequestsPage() {
   const appItems = appStatus ? appAllItems : appAllItems.filter((i) => !TERMINAL.has(i.status));
 
   return (
-    <>
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="Auctions" description="Active delivery request auctions">
         <Link href="/delivery-requests/history">
           <Button variant="outline" className="h-9 text-sm">
@@ -310,7 +310,7 @@ export default function DeliveryRequestsPage() {
           )}
         </TabsContent>
       </Tabs>
-    </>
+    </div>
   );
 }
 

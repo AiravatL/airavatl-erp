@@ -219,7 +219,7 @@ export default function VerificationPendingPage() {
     user?.role === "sales_vehicles";
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Verification"
         description="Verify partners, employee drivers, and fleet vehicles."

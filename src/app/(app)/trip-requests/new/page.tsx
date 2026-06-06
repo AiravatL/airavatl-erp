@@ -121,7 +121,7 @@ export default function NewTripRequestPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="New Trip Request"
         description="Capture a request from a consigner — ops will review and create an auction"

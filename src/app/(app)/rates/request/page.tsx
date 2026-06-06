@@ -129,7 +129,7 @@ export default function RequestRatePage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Request Rate"
         description="Create a pricing request for the vehicle team. Freight amount is not required here."

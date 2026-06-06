@@ -193,7 +193,7 @@ export default function AddLeadPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title={isEditMode ? "Edit Lead" : "Add New Lead"} description={isEditMode ? "Update lead information" : "Create a new consigner lead to track in your pipeline"} />
 
       <Card>

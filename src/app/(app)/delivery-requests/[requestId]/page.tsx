@@ -145,7 +145,7 @@ export default function AuctionDetailPage({
 
   if (fetchError || !req) {
     return (
-      <div className="space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         <Link
           href="/delivery-requests"
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
@@ -170,7 +170,7 @@ export default function AuctionDetailPage({
     || (req.vehicle_type as string);
 
   return (
-    <>
+    <div className="p-4 sm:p-6 space-y-4">
       {/* Header */}
       <Link
         href="/delivery-requests"
@@ -588,7 +588,7 @@ export default function AuctionDetailPage({
         label={req.request_number as string}
         description={`Status: ${status}${bids.length > 0 ? ` · ${bids.length} bid(s) will be deleted` : ""}`}
       />
-    </>
+    </div>
   );
 }
 

@@ -98,7 +98,7 @@ export default function AllRatesPage() {
   const canRequestRate = Boolean(user && REQUEST_RATE_ROLES.includes(user.role));
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="All Rates" description={`${rates.length} approved rates in the library`}>
         {canRequestRate && (
           <Button size="sm" className="h-8 text-xs" asChild>

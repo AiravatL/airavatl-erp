@@ -71,7 +71,7 @@ export default function TripRequestsPage() {
   const total = query.data?.total ?? 0;
 
   return (
-    <>
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="Trip Requests" description="Lightweight requests from enterprise clients & consigner sales">
         <Button onClick={() => router.push("/trip-requests/new")} className="h-9 text-sm">
           <Plus className="h-4 w-4 mr-1.5" /> New Request
@@ -150,7 +150,7 @@ export default function TripRequestsPage() {
           </>
         )}
       </div>
-    </>
+    </div>
   );
 }
 

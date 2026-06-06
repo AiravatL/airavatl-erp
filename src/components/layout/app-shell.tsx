@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   UserRound,
+  X,
 } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { PageHeaderProvider, usePageHeaderInfo } from "./page-header-context";
@@ -46,18 +47,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Sidebar collapsed={sidebarCollapsed} />
           </div>
 
-          {/* Mobile sidebar overlay */}
-          {sidebarOpen && (
-            <div className="fixed inset-0 z-[1100] lg:hidden">
-              <div
-                className="fixed inset-0 bg-black/30"
-                onClick={() => setSidebarOpen(false)}
-              />
-              <div className="fixed inset-y-0 left-0 top-16 z-[1110] w-64">
-                <Sidebar onNavigate={() => setSidebarOpen(false)} />
+          {/* Mobile sidebar drawer (always mounted so it can animate) */}
+          <div
+            className={`fixed inset-0 z-[1100] lg:hidden ${
+              sidebarOpen ? "" : "pointer-events-none"
+            }`}
+            aria-hidden={!sidebarOpen}
+          >
+            <div
+              className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
+                sidebarOpen ? "opacity-100" : "opacity-0"
+              }`}
+              onClick={() => setSidebarOpen(false)}
+            />
+            <div
+              className={`absolute inset-y-0 left-0 z-[1110] flex w-[80%] max-w-xs flex-col bg-white shadow-xl transition-transform duration-200 ease-out ${
+                sidebarOpen ? "translate-x-0" : "-translate-x-full"
+              }`}
+            >
+              <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-4">
+                <span className="text-sm font-semibold text-gray-900">Menu</span>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  aria-label="Close menu"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
+              <Sidebar onNavigate={() => setSidebarOpen(false)} />
             </div>
-          )}
+          </div>
 
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>

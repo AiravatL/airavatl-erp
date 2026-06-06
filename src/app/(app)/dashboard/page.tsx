@@ -2,92 +2,44 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/lib/auth/auth-context";
 import { getAppOverview } from "@/lib/api/app-reports";
-import { listAppTrips, type AppTripItem } from "@/lib/api/app-reports";
-import { listTripRequests } from "@/lib/api/trip-requests";
-import { formatCurrency } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query/keys";
 import type { Role } from "@/lib/types";
+import { StatCard } from "./_components/dashboard-panel";
 import {
-  Truck, CreditCard, Receipt, ArrowRight, Plus,
-  TicketCheck, Users, TrendingUp, PackagePlus,
-  MapPin, BarChart3, ShieldCheck, ClipboardList,
+  TripRequestsPanel, ActiveTripsPanel, VerificationPanel,
+  PayoutOnboardingPanel, PaymentQueuePanel, TicketsPanel,
+} from "./_components/role-panels";
+import {
+  Truck, CreditCard, Receipt, Plus, TicketCheck, Users,
+  PackagePlus, MapPin, BarChart3, ShieldCheck, ClipboardList,
 } from "lucide-react";
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
   super_admin: "Full overview of operations, approvals, and analytics",
   admin: "Full overview of operations, approvals, and analytics",
   operations: "Trip dispatch, fleet management, and driver coordination",
-  sales_vehicles: "Vehicle sourcing, partner onboarding, and market rates",
+  sales_vehicles: "Partner verification, onboarding, and fleet sourcing",
   sales_consigner: "Customer CRM, consigner management, and collections",
   accounts: "Payments, settlements, and receivable aging",
   support: "Open tickets and follow-up tasks",
-};
-
-function prettify(s: string) {
-  return s.split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-700",
-  waiting_driver_acceptance: "bg-amber-100 text-amber-700",
-  driver_assigned: "bg-blue-100 text-blue-700",
-  en_route_to_pickup: "bg-cyan-100 text-cyan-700",
-  at_pickup: "bg-cyan-100 text-cyan-700",
-  loading: "bg-indigo-100 text-indigo-700",
-  in_transit: "bg-purple-100 text-purple-700",
-  at_delivery: "bg-purple-100 text-purple-700",
-  unloading: "bg-violet-100 text-violet-700",
-  waiting_for_advance: "bg-amber-100 text-amber-700",
-  waiting_for_final: "bg-amber-100 text-amber-700",
 };
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const role = user?.role ?? "super_admin";
 
-  // Overview metrics (single lightweight RPC)
   const overviewQuery = useQuery({
     queryKey: queryKeys.appOverview({}),
     queryFn: () => getAppOverview(),
     enabled: !!user,
     staleTime: 60_000,
   });
-
-  // Active trips (small page, just for the list)
-  const tripsQuery = useQuery({
-    queryKey: queryKeys.appTrips({ limit: 6 }),
-    queryFn: () => listAppTrips({ limit: 6 }),
-    enabled: !!user,
-    staleTime: 30_000,
-  });
-
-  // Pending trip requests — visible to anyone who can view trip requests
-  const canViewTripRequests =
-    role === "super_admin" || role === "admin" || role === "operations" || role === "sales_consigner";
-  const tripRequestsQuery = useQuery({
-    queryKey: queryKeys.tripRequests({ status: "pending_review", limit: 6 }),
-    queryFn: () => listTripRequests({ status: "pending_review", limit: 6 }),
-    enabled: !!user && canViewTripRequests,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-  });
-
   const metrics = overviewQuery.data?.metrics;
-  const activeTrips = (tripsQuery.data?.items ?? []).filter(
-    (t) => !["completed", "cancelled", "driver_rejected"].includes(t.status),
-  );
-  const pendingTripRequests = tripRequestsQuery.data?.items ?? [];
-  const pendingTripRequestsTotal = tripRequestsQuery.data?.total ?? 0;
-
-  // Quick actions by role
   const quickActions = getQuickActions(role);
-  const showFinancials = false; // Financial stats removed from dashboard — use Reports > Financial instead
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -101,7 +53,7 @@ export default function DashboardPage() {
         <div className="flex gap-2 overflow-x-auto pb-1">
           {quickActions.map((action) => (
             <Link key={action.href + action.label} href={action.href}>
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 shrink-0">
+              <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 text-xs">
                 <action.icon className="h-3.5 w-3.5" />
                 {action.label}
               </Button>
@@ -110,7 +62,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Stats cards — role-aware */}
+      {/* Stat cards — role-aware */}
       {role === "sales_vehicles" ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatCard icon={ShieldCheck} iconBg="bg-amber-50" iconColor="text-amber-600"
@@ -142,142 +94,50 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showFinancials && metrics && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <StatCard icon={CreditCard} iconBg="bg-purple-50" iconColor="text-purple-600"
-            value={metrics.paymentsCount} label="Payments (30d)" isAmount={false} />
-          <StatCard icon={Receipt} iconBg="bg-amber-50" iconColor="text-amber-600"
-            value={metrics.paymentsVolume} label="Volume (30d)" isAmount />
-          <StatCard icon={TrendingUp} iconBg="bg-green-50" iconColor="text-green-600"
-            value={metrics.platformRevenue} label="Revenue (30d)" isAmount />
-        </div>
-      )}
-
-      {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Pending Trip Requests */}
-        {canViewTripRequests && (
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-gray-900">
-                  Pending Trip Requests
-                  {pendingTripRequestsTotal > 0 && (
-                    <Badge variant="outline" className="border-0 text-[10px] font-medium ml-2 bg-amber-100 text-amber-700">
-                      {pendingTripRequestsTotal}
-                    </Badge>
-                  )}
-                </CardTitle>
-                <Link href="/trip-requests" className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
-                  View all <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {tripRequestsQuery.isLoading ? (
-                <div className="px-4 py-6 text-center text-sm text-gray-400">Loading...</div>
-              ) : pendingTripRequests.length === 0 ? (
-                <div className="px-4 py-6 text-center">
-                  <ClipboardList className="h-8 w-8 text-gray-200 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">No pending requests</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100">
-                  {pendingTripRequests.slice(0, 5).map((req) => (
-                    <Link key={req.id} href={`/trip-requests/${req.id}`}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-sm font-medium text-gray-900">{req.request_number}</span>
-                          <Badge variant="outline" className={`border-0 text-[10px] font-medium ${
-                            req.source === "enterprise_portal" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"
-                          }`}>
-                            {req.source === "enterprise_portal" ? "Portal" : "Sales"}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-gray-500 truncate">
-                          {req.consigner_display ?? "—"} · {req.pickup_city ?? req.pickup_address} → {req.delivery_city ?? req.delivery_address}
-                        </p>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Active Trips */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-gray-900">Active Trips</CardTitle>
-              <Link href="/trips" className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
-                View all <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {tripsQuery.isLoading ? (
-              <div className="px-4 py-6 text-center text-sm text-gray-400">Loading...</div>
-            ) : activeTrips.length === 0 ? (
-              <div className="px-4 py-6 text-center">
-                <Truck className="h-8 w-8 text-gray-200 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">No active trips</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {activeTrips.slice(0, 5).map((trip) => (
-                  <Link key={trip.id} href={`/trips/${trip.id}`}
-                    className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium text-gray-900">{trip.tripNumber}</span>
-                      </div>
-                      <p className="text-xs text-gray-500 truncate">
-                        {trip.consignerName} · {trip.pickupCity} → {trip.deliveryCity}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className={`border-0 text-[10px] font-medium shrink-0 ${STATUS_COLORS[trip.status] ?? "bg-gray-100 text-gray-600"}`}>
-                      {prettify(trip.status)}
-                    </Badge>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-      </div>
+      {/* Main content — role-specific panels */}
+      <RolePanels role={role} />
     </div>
   );
 }
 
-function StatCard({ icon: Icon, iconBg, iconColor, value, label, isAmount }: {
-  icon: React.ComponentType<{ className?: string }>;
-  iconBg: string;
-  iconColor: string;
-  value: number;
-  label: string;
-  isAmount?: boolean;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconBg}`}>
-            <Icon className={`h-4 w-4 ${iconColor}`} />
-          </div>
-          <div>
-            <p className="text-xl font-semibold text-gray-900">
-              {isAmount ? formatCurrency(value) : value.toLocaleString("en-IN")}
-            </p>
-            <p className="text-xs text-gray-500">{label}</p>
-          </div>
+/** Renders the main content panels relevant to each role. */
+function RolePanels({ role }: { role: Role }) {
+  switch (role) {
+    case "sales_vehicles":
+      return (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <VerificationPanel />
+          <PayoutOnboardingPanel />
         </div>
-      </CardContent>
-    </Card>
-  );
+      );
+    case "accounts":
+      return (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <PaymentQueuePanel />
+          <ActiveTripsPanel />
+        </div>
+      );
+    case "support":
+      return (
+        <div className="grid grid-cols-1 gap-4">
+          <TicketsPanel />
+        </div>
+      );
+    case "sales_consigner":
+      return (
+        <div className="grid grid-cols-1 gap-4">
+          <TripRequestsPanel />
+        </div>
+      );
+    default:
+      // super_admin, admin, operations
+      return (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <TripRequestsPanel />
+          <ActiveTripsPanel />
+        </div>
+      );
+  }
 }
 
 function getQuickActions(role: Role) {
@@ -289,8 +149,8 @@ function getQuickActions(role: Role) {
       ];
     case "sales_vehicles":
       return [
+        { label: "Verification", href: "/verification", icon: ShieldCheck },
         { label: "Fleet", href: "/fleet", icon: Users },
-        { label: "Verification", href: "/verification", icon: Truck },
         { label: "Rate Library", href: "/rates", icon: Receipt },
       ];
     case "operations":

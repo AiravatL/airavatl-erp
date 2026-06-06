@@ -60,7 +60,7 @@ export default function TripHistoryPage() {
 
   if (!canViewHistory) {
     return (
-      <div className="space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         <PageHeader title="Trip History" description="Admin / Operations only" />
         <Card><CardContent className="p-6"><p className="text-sm text-gray-600">Trip History is available only to Admin and Operations roles.</p></CardContent></Card>
       </div>
@@ -68,7 +68,7 @@ export default function TripHistoryPage() {
   }
 
   return (
-    <>
+    <div className="p-4 sm:p-6 space-y-4">
       <Link href="/trips" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
         <ArrowLeft className="h-4 w-4" /> Back to Active Trips
       </Link>
@@ -163,6 +163,6 @@ export default function TripHistoryPage() {
           )}
         </>
       )}
-    </>
+    </div>
   );
 }

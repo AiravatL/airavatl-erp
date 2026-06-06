@@ -60,7 +60,7 @@ export default function AllLeadsPage() {
   const filtered = leadsQuery.data ?? [];
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="All Leads" description={`${filtered.length} leads`}>
         <div className="flex items-center gap-2">
           <div className="flex items-center rounded-md border border-gray-200 p-0.5">

@@ -145,7 +145,7 @@ export default function RateRequestsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="Rate Requests" description="Track requests and pricing workflow">
         {canRequest && (
           <Button size="sm" className="h-8 text-xs" asChild>

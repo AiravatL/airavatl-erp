@@ -76,7 +76,7 @@ export default function TripsListPage() {
   const active = items.length;
 
   return (
-    <>
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="Trips" description={`${total} trip${total !== 1 ? "s" : ""}`}>
         {(isAdmin || isOps) && (
           <Link href="/trips/history">
@@ -196,6 +196,6 @@ export default function TripsListPage() {
           )}
         </>
       )}
-    </>
+    </div>
   );
 }

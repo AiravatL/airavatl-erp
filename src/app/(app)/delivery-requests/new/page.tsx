@@ -387,7 +387,7 @@ export default function CreateDeliveryRequestPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title={isEditMode ? "Edit Auction" : isRepeatMode ? "Repeat Auction" : fromTripRequestId ? "Create Auction from Trip Request" : "Create Delivery Request"}
         description={isEditMode ? "Modify auction details (only before any bids)" : isRepeatMode ? "Create a new auction with pre-filled details from the previous one" : fromTripRequestId ? "Filling in vehicle, date, and auction duration to convert this request into an auction" : "Create an auction for drivers to bid on"}

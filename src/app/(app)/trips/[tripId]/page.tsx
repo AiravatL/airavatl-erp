@@ -175,7 +175,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
   if (tripQuery.error || !tripQuery.data?.trip) {
     return (
-      <div className="space-y-4">
+      <div className="p-4 sm:p-6 space-y-4">
         <Link href="/trips" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
           <ArrowLeft className="h-4 w-4" /> Back to Trips
         </Link>
@@ -212,7 +212,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
     driverType === "transporter" ? "Transporter (Contract Holder)" : "Driver";
 
   return (
-    <div className="space-y-3">
+    <div className="p-4 sm:p-6 space-y-3">
       {/* Back nav + hero combined into one tight row */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 min-w-0">
