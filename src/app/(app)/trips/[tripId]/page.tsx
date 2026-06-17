@@ -104,7 +104,10 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
 
   const isTerminal = status != null && ["completed", "cancelled", "driver_rejected"].includes(status);
   const isErp = !!tripQuery.data?.request_metadata;
-  const canRequestPayment = (isOps || isAdmin) && isErp;
+  // Enterprise trips are operated by the consigner in their portal — ERP is
+  // read-only (operational RPCs also refuse these rows server-side).
+  const isEnterprise = tripQuery.data?.is_enterprise === true;
+  const canRequestPayment = (isOps || isAdmin) && isErp && !isEnterprise;
 
   const paymentRequestsQuery = useQuery({
     queryKey: queryKeys.tripPaymentRequests(tripId),
@@ -224,7 +227,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
           <Badge variant="outline" className={`border-0 font-semibold text-[11px] px-2 py-0 h-5 ${statusColor}`}>
             {statusLabel}
           </Badge>
-          {isErpTrip && <Badge variant="outline" className="border-0 text-[10px] bg-blue-50 text-blue-700 font-medium h-5">ERP</Badge>}
+          {isErpTrip && !isEnterprise && <Badge variant="outline" className="border-0 text-[10px] bg-blue-50 text-blue-700 font-medium h-5">ERP</Badge>}
+          {isEnterprise && <Badge variant="outline" className="border-0 text-[10px] bg-violet-100 text-violet-700 font-medium h-5" title="Operated by the enterprise consigner — monitoring only">Enterprise</Badge>}
           <span className="text-gray-300 ml-1">·</span>
           <span className="inline-flex items-center gap-1 text-xs text-gray-600">
             <Route className="h-3 w-3 text-gray-400" />
@@ -237,7 +241,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {isAdmin && (
+          {isAdmin && !isEnterprise && (
             <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
               onClick={() => setDeleteDialogOpen(true)}>
               <Trash2 className="h-3 w-3 mr-1" /> Delete
@@ -473,8 +477,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
           {isErp && (
             <HoldingChargesCard
               tripId={tripId}
-              canEdit={isOps || isAdmin}
-              readOnly={isTerminal || finalAlreadyRequested}
+              canEdit={(isOps || isAdmin) && !isEnterprise}
+              readOnly={isTerminal || finalAlreadyRequested || isEnterprise}
             />
           )}
 
@@ -532,7 +536,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                           proof={proof}
                           label="Loading Proof"
                           isErp={isErpTrip}
-                          canReview={(isOps || isAdmin) && isErpTrip}
+                          canReview={(isOps || isAdmin) && isErpTrip && !isEnterprise}
                           onAccept={() => proofReviewMutation.mutate({ proofId: proof.id, action: "accept" })}
                           onReject={() => { setRejectProofId(proof.id); setRejectReason(""); proofReviewMutation.reset(); }}
                           isPending={proofReviewMutation.isPending}
@@ -549,7 +553,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                           proof={proof}
                           label="Proof of Delivery"
                           isErp={isErpTrip}
-                          canReview={(isOps || isAdmin) && isErpTrip}
+                          canReview={(isOps || isAdmin) && isErpTrip && !isEnterprise}
                           onAccept={() => proofReviewMutation.mutate({ proofId: proof.id, action: "accept" })}
                           onReject={() => { setRejectProofId(proof.id); setRejectReason(""); proofReviewMutation.reset(); }}
                           isPending={proofReviewMutation.isPending}

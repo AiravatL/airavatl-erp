@@ -50,6 +50,7 @@ export default function TripsListPage() {
   const isOps = user ? OPS_ROLES.has(user.role) : false;
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
 
+  const [tab, setTab] = useState<"all" | "erp" | "app" | "enterprise">("all");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
   const [status, setStatus] = useState("");
@@ -58,9 +59,10 @@ export default function TripsListPage() {
   const filters = useMemo(() => ({
     search: debouncedSearch || undefined,
     status: status || undefined,
+    source: tab === "all" ? undefined : tab,
     limit: PAGE_SIZE,
     offset,
-  }), [debouncedSearch, status, offset]);
+  }), [debouncedSearch, status, tab, offset]);
 
   const query = useQuery({
     queryKey: queryKeys.appTrips(filters),
@@ -91,6 +93,22 @@ export default function TripsListPage() {
         <KpiCard label="Total Trips" value={total.toLocaleString("en-IN")} />
         <KpiCard label="Active" value={active.toLocaleString("en-IN")} />
         <KpiCard label="In Transit" value={items.filter((t) => t.status === "in_transit").length.toLocaleString("en-IN")} />
+      </div>
+
+      {/* Source tabs — separate ERP / App / Enterprise (consigner-operated) trips */}
+      <div className="inline-flex gap-1 rounded-md bg-gray-100 p-1">
+        {([["all", "All"], ["erp", "ERP"], ["app", "App"], ["enterprise", "Enterprise"]] as const).map(([v, label]) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => { setTab(v); setOffset(0); }}
+            className={`rounded px-3 h-7 text-xs font-medium transition-colors ${
+              tab === v ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
@@ -142,6 +160,11 @@ export default function TripsListPage() {
                     <tr key={item.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => window.location.href = `/trips/${item.id}`}>
                       <td className="px-4 py-3">
                         <Link href={`/trips/${item.id}`} className="font-medium text-blue-600 hover:underline">{item.tripNumber}</Link>
+                        {item.isEnterprise && (
+                          <Badge variant="outline" className="ml-1.5 border-0 font-medium text-[10px] bg-violet-100 text-violet-700">
+                            Enterprise
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-700">{item.pickupCity} → {item.deliveryCity}</td>
                       <td className="px-4 py-3 text-gray-700">{item.consignerName}</td>
@@ -167,7 +190,14 @@ export default function TripsListPage() {
               <Card className="hover:bg-gray-50/50 transition-colors">
                 <CardContent className="p-3">
                   <div className="flex items-start justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900">{item.tripNumber}</span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                      {item.tripNumber}
+                      {item.isEnterprise && (
+                        <Badge variant="outline" className="border-0 font-medium text-[10px] bg-violet-100 text-violet-700">
+                          Enterprise
+                        </Badge>
+                      )}
+                    </span>
                     <Badge variant="outline" className={`border-0 font-medium text-xs ${STATUS_COLORS[item.status as AppTripStatus] ?? "bg-gray-100 text-gray-700"}`}>
                       {prettify(item.status)}
                     </Badge>

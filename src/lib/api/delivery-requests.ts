@@ -104,6 +104,7 @@ export interface AuctionListItem {
   erp_created_by_id: string | null;
   erp_created_by_name: string | null;
   source: "erp" | "app";
+  is_enterprise?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -147,6 +148,8 @@ export interface AuctionDetailResponse {
     selected_by_admin_id: string;
     selected_by_name: string | null;
   } | null;
+  // True when the auction is operated by an enterprise consigner (ERP read-only).
+  is_enterprise?: boolean;
 }
 
 // -- Delivery Request API --
@@ -154,6 +157,7 @@ export interface AuctionDetailResponse {
 export interface AuctionStatsResponse {
   erp: { open: number; active: number };
   app: { open: number; active: number };
+  enterprise?: { open: number; active: number };
 }
 
 export async function getDeliveryRequestStats(): Promise<AuctionStatsResponse> {

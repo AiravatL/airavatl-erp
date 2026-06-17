@@ -44,13 +44,26 @@ export async function GET(request: Request) {
     items: Array<Record<string, unknown>>;
   } | null;
 
+  const items = result?.items ?? [];
+
+  // Flag enterprise-operated auctions for a per-row badge (one bulk lookup).
+  let enterpriseIds = new Set<string>();
+  const ids = items.map((i) => i.id as string).filter(Boolean);
+  if (ids.length > 0) {
+    const { data: flagged } = await actorResult.supabase.rpc(
+      "enterprise_request_ids_v1",
+      { p_ids: ids } as never,
+    );
+    enterpriseIds = new Set((flagged as string[] | null) ?? []);
+  }
+
   return NextResponse.json({
     ok: true,
     data: {
       total: result?.total ?? 0,
       limit: result?.limit ?? 50,
       offset: result?.offset ?? 0,
-      items: result?.items ?? [],
+      items: items.map((i) => ({ ...i, is_enterprise: enterpriseIds.has(i.id as string) })),
     },
   });
 }

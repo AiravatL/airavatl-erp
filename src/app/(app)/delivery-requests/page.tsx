@@ -47,7 +47,7 @@ const PAGE_SIZE = 50;
 
 export default function DeliveryRequestsPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<"erp" | "app">("erp");
+  const [tab, setTab] = useState<"erp" | "app" | "enterprise">("erp");
 
   // KPI counts come from a dedicated RPC so they stay stable as the user
   // changes search / status filters on the list below.
@@ -60,6 +60,7 @@ export default function DeliveryRequestsPage() {
   });
   const erpStats = statsQuery.data?.erp ?? { open: 0, active: 0 };
   const appStats = statsQuery.data?.app ?? { open: 0, active: 0 };
+  const enterpriseStats = statsQuery.data?.enterprise ?? { open: 0, active: 0 };
 
   // ERP state
   const [erpSearch, setErpSearch] = useState("");
@@ -113,6 +114,31 @@ export default function DeliveryRequestsPage() {
   const appAllItems = appQuery.data?.items ?? [];
   const appItems = appStatus ? appAllItems : appAllItems.filter((i) => !TERMINAL.has(i.status));
 
+  // Enterprise state (consigner-operated auctions — ERP monitors only)
+  const [entSearch, setEntSearch] = useState("");
+  const entDebouncedSearch = useDebouncedValue(entSearch, 300);
+  const [entStatus, setEntStatus] = useState("");
+  const [entOffset, setEntOffset] = useState(0);
+
+  const entFilters = useMemo(() => ({
+    search: entDebouncedSearch || undefined,
+    status: entStatus || undefined,
+    source: "enterprise" as const,
+    limit: PAGE_SIZE,
+    offset: entOffset,
+  }), [entDebouncedSearch, entStatus, entOffset]);
+
+  const entQuery = useQuery({
+    queryKey: queryKeys.deliveryRequests({ ...entFilters }),
+    queryFn: () => listDeliveryRequests(entFilters),
+    enabled: tab === "enterprise",
+    staleTime: 30_000,
+    refetchInterval: tab === "enterprise" ? 30_000 : false,
+    placeholderData: keepPreviousData,
+  });
+  const entAllItems = entQuery.data?.items ?? [];
+  const entItems = entStatus ? entAllItems : entAllItems.filter((i) => !TERMINAL.has(i.status));
+
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader title="Auctions" description="Active delivery request auctions">
@@ -126,191 +152,174 @@ export default function DeliveryRequestsPage() {
         </Button>
       </PageHeader>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
         <KpiCard label="ERP Auctions" value={erpStats.open.toLocaleString("en-IN")} />
         <KpiCard label="App Auctions" value={appStats.open.toLocaleString("en-IN")} />
-        <KpiCard label="ERP Active" value={erpStats.active.toLocaleString("en-IN")} />
-        <KpiCard label="App Active" value={appStats.active.toLocaleString("en-IN")} />
+        <KpiCard label="Enterprise Auctions" value={enterpriseStats.open.toLocaleString("en-IN")} />
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "erp" | "app")}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "erp" | "app" | "enterprise")}>
         <TabsList className="bg-gray-100 h-8">
           <TabsTrigger value="erp" className="text-xs h-7 data-[state=active]:bg-white">ERP ({erpStats.open})</TabsTrigger>
           <TabsTrigger value="app" className="text-xs h-7 data-[state=active]:bg-white">App ({appStats.open})</TabsTrigger>
+          <TabsTrigger value="enterprise" className="text-xs h-7 data-[state=active]:bg-white">Enterprise ({enterpriseStats.open})</TabsTrigger>
         </TabsList>
 
         {/* ERP Tab */}
         <TabsContent value="erp" className="mt-4 space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input placeholder="Search request #, city, consigner..." value={erpSearch}
-                onChange={(e) => { setErpSearch(e.target.value); setErpOffset(0); }}
-                className="pl-9 h-9 text-sm" />
-            </div>
-            <div className="flex gap-1.5">
-              <Button variant={!erpStatus ? "default" : "outline"} size="sm" className="h-9 text-xs"
-                onClick={() => { setErpStatus(""); setErpOffset(0); }}>All</Button>
-              {AUCTION_PAGE_STATUSES.map((s) => (
-                <Button key={s} variant={erpStatus === s ? "default" : "outline"} size="sm" className="h-9 text-xs"
-                  onClick={() => { setErpStatus(s); setErpOffset(0); }}>{prettifyStatus(s)}</Button>
-              ))}
-            </div>
-          </div>
-
-          <ListState loading={erpQuery.isLoading} error={erpQuery.error} empty={erpItems.length === 0} emptyLabel="No ERP auctions yet" />
-          {erpItems.length > 0 && (
-            <>
-              <div className="hidden sm:block">
-                <Card><div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b border-gray-100">
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Request #</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Route</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Vehicle</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-500">Bids</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
-                      <th className="px-4 py-3 w-10"></th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {erpItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <Link href={`/delivery-requests/${item.id}`} className="font-medium text-blue-600 hover:underline">{item.request_number}</Link>
-                            <Badge variant="outline" className="ml-1.5 border-0 font-medium text-[10px] bg-blue-50 text-blue-700">
-                              {item.source === "erp" ? "ERP" : "APP"}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{item.pickup_city} → {item.delivery_city}</td>
-                          <td className="px-4 py-3 text-gray-600">{VEHICLE_TYPE_LABELS[item.vehicle_type as VehicleTypeRequired] ?? item.vehicle_type}</td>
-                          <td className="px-4 py-3">
-                            <Badge variant="outline" className={`border-0 font-medium text-xs ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-700"}`}>
-                              {DELIVERY_REQUEST_STATUS_LABELS[item.status as DeliveryRequestStatus] ?? prettify(item.status)}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-right text-gray-700">{item.total_bids_count}</td>
-                          <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
-                          <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div></Card>
-              </div>
-              <div className="sm:hidden space-y-2">
-                {erpItems.map((item) => (
-                  <Link key={item.id} href={`/delivery-requests/${item.id}`}>
-                    <Card className="hover:bg-gray-50 transition-colors">
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-900">{item.request_number}</span>
-                          <Badge variant="outline" className={`border-0 text-xs ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-700"}`}>
-                            {DELIVERY_REQUEST_STATUS_LABELS[item.status as DeliveryRequestStatus] ?? prettify(item.status)}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-700">{item.pickup_city} → {item.delivery_city}</p>
-                        <div className="flex gap-2 text-xs text-gray-500 mt-1">
-                          <span>{item.total_bids_count} bids</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-              <Pagination total={erpQuery.data?.total ?? 0} offset={erpOffset} onOffsetChange={setErpOffset} />
-            </>
-          )}
+          <AuctionListPanel
+            items={erpItems} total={erpQuery.data?.total ?? 0}
+            loading={erpQuery.isLoading} error={erpQuery.error}
+            search={erpSearch} onSearchChange={(v) => { setErpSearch(v); setErpOffset(0); }}
+            status={erpStatus} onStatusChange={(v) => { setErpStatus(v); setErpOffset(0); }}
+            offset={erpOffset} onOffsetChange={setErpOffset}
+            searchPlaceholder="Search request #, city, consigner..." emptyLabel="No ERP auctions yet" />
         </TabsContent>
 
         {/* App Tab */}
         <TabsContent value="app" className="mt-4 space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input placeholder="Search request #, city..." value={appSearch}
-                onChange={(e) => { setAppSearch(e.target.value); setAppOffset(0); }}
-                className="pl-9 h-9 text-sm" />
-            </div>
-            <div className="flex gap-1.5">
-              <Button variant={!appStatus ? "default" : "outline"} size="sm" className="h-9 text-xs"
-                onClick={() => { setAppStatus(""); setAppOffset(0); }}>All</Button>
-              {AUCTION_PAGE_STATUSES.map((s) => (
-                <Button key={s} variant={appStatus === s ? "default" : "outline"} size="sm" className="h-9 text-xs"
-                  onClick={() => { setAppStatus(s); setAppOffset(0); }}>{prettifyStatus(s)}</Button>
-              ))}
-            </div>
-          </div>
+          <AuctionListPanel
+            items={appItems} total={appQuery.data?.total ?? 0}
+            loading={appQuery.isLoading} error={appQuery.error}
+            search={appSearch} onSearchChange={(v) => { setAppSearch(v); setAppOffset(0); }}
+            status={appStatus} onStatusChange={(v) => { setAppStatus(v); setAppOffset(0); }}
+            offset={appOffset} onOffsetChange={setAppOffset}
+            searchPlaceholder="Search request #, city..." emptyLabel="No app auctions found" />
+        </TabsContent>
 
-          <ListState loading={appQuery.isLoading} error={appQuery.error} empty={appItems.length === 0} emptyLabel="No app auctions found" />
-          {appItems.length > 0 && (
-            <>
-              <div className="hidden sm:block">
-                <Card><div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b border-gray-100">
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Request #</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Route</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Vehicle</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-500">Bids</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
-                      <th className="px-4 py-3 w-10"></th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {appItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <Link href={`/delivery-requests/${item.id}`} className="font-medium text-blue-600 hover:underline">{item.request_number}</Link>
-                            <Badge variant="outline" className="ml-1.5 border-0 font-medium text-[10px] bg-gray-100 text-gray-600">APP</Badge>
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{item.pickup_city} → {item.delivery_city}</td>
-                          <td className="px-4 py-3 text-gray-600">{VEHICLE_TYPE_LABELS[item.vehicle_type as VehicleTypeRequired] ?? item.vehicle_type}</td>
-                          <td className="px-4 py-3">
-                            <Badge variant="outline" className={`border-0 font-medium text-xs ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-700"}`}>
-                              {DELIVERY_REQUEST_STATUS_LABELS[item.status as DeliveryRequestStatus] ?? prettify(item.status)}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-right text-gray-700">{item.total_bids_count}</td>
-                          <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
-                          <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div></Card>
-              </div>
-              <div className="sm:hidden space-y-2">
-                {appItems.map((item) => (
-                  <Link key={item.id} href={`/delivery-requests/${item.id}`}>
-                    <Card className="hover:bg-gray-50 transition-colors">
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-900">{item.request_number}</span>
-                          <Badge variant="outline" className={`border-0 text-xs ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-700"}`}>
-                            {DELIVERY_REQUEST_STATUS_LABELS[item.status as DeliveryRequestStatus] ?? prettify(item.status)}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-700">{item.pickup_city} → {item.delivery_city}</p>
-                        <div className="flex gap-2 text-xs text-gray-500 mt-1">
-                          <span>{item.consigner_name}</span>
-                          <span>·</span><span>{item.total_bids_count} bids</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
-              <Pagination total={appQuery.data?.total ?? 0} offset={appOffset} onOffsetChange={setAppOffset} />
-            </>
-          )}
+        {/* Enterprise Tab — consigner-operated auctions, ERP monitors only */}
+        <TabsContent value="enterprise" className="mt-4 space-y-3">
+          <AuctionListPanel
+            items={entItems} total={entQuery.data?.total ?? 0}
+            loading={entQuery.isLoading} error={entQuery.error}
+            search={entSearch} onSearchChange={(v) => { setEntSearch(v); setEntOffset(0); }}
+            status={entStatus} onStatusChange={(v) => { setEntStatus(v); setEntOffset(0); }}
+            offset={entOffset} onOffsetChange={setEntOffset}
+            searchPlaceholder="Search request #, city, consigner..." emptyLabel="No enterprise auctions yet" />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function SourceBadge({ item }: { item: AuctionListItem }) {
+  if (item.is_enterprise) {
+    return <Badge variant="outline" className="ml-1.5 border-0 font-medium text-[10px] bg-violet-100 text-violet-700">Enterprise</Badge>;
+  }
+  return (
+    <Badge variant="outline" className={`ml-1.5 border-0 font-medium text-[10px] ${item.source === "erp" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+      {item.source === "erp" ? "ERP" : "APP"}
+    </Badge>
+  );
+}
+
+function AuctionListPanel({
+  items, total, loading, error, search, onSearchChange, status, onStatusChange,
+  offset, onOffsetChange, searchPlaceholder, emptyLabel,
+}: {
+  items: AuctionListItem[];
+  total: number;
+  loading: boolean;
+  error: unknown;
+  search: string;
+  onSearchChange: (v: string) => void;
+  status: string;
+  onStatusChange: (v: string) => void;
+  offset: number;
+  onOffsetChange: (v: number) => void;
+  searchPlaceholder: string;
+  emptyLabel: string;
+}) {
+  return (
+    <>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input placeholder={searchPlaceholder} value={search}
+            onChange={(e) => onSearchChange(e.target.value)} className="pl-9 h-9 text-sm" />
+        </div>
+        <div className="flex gap-1.5">
+          <Button variant={!status ? "default" : "outline"} size="sm" className="h-9 text-xs"
+            onClick={() => onStatusChange("")}>All</Button>
+          {AUCTION_PAGE_STATUSES.map((s) => (
+            <Button key={s} variant={status === s ? "default" : "outline"} size="sm" className="h-9 text-xs"
+              onClick={() => onStatusChange(s)}>{prettifyStatus(s)}</Button>
+          ))}
+        </div>
+      </div>
+
+      <ListState loading={loading} error={error} empty={items.length === 0} emptyLabel={emptyLabel} />
+      {items.length > 0 && (
+        <>
+          <div className="hidden sm:block">
+            <Card><div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-gray-100">
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Request #</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Route</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Vehicle</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500">Bids</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Consigner</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">Date</th>
+                  <th className="px-4 py-3 w-10"></th>
+                </tr></thead>
+                <tbody className="divide-y divide-gray-50">
+                  {items.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <Link href={`/delivery-requests/${item.id}`} className="font-medium text-blue-600 hover:underline">{item.request_number}</Link>
+                        <SourceBadge item={item} />
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{item.pickup_city} → {item.delivery_city}</td>
+                      <td className="px-4 py-3 text-gray-600">{VEHICLE_TYPE_LABELS[item.vehicle_type as VehicleTypeRequired] ?? item.vehicle_type}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className={`border-0 font-medium text-xs ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-700"}`}>
+                          {DELIVERY_REQUEST_STATUS_LABELS[item.status as DeliveryRequestStatus] ?? prettify(item.status)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-700">{item.total_bids_count}</td>
+                      <td className="px-4 py-3 text-gray-600">{item.consigner_name}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.created_at)}</td>
+                      <td className="px-4 py-3"><AuctionRowMenu auctionId={item.id} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div></Card>
+          </div>
+          <div className="sm:hidden space-y-2">
+            {items.map((item) => (
+              <Link key={item.id} href={`/delivery-requests/${item.id}`}>
+                <Card className="hover:bg-gray-50 transition-colors">
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between mb-1">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                        {item.request_number}
+                        {item.is_enterprise && (
+                          <Badge variant="outline" className="border-0 font-medium text-[10px] bg-violet-100 text-violet-700">
+                            Enterprise
+                          </Badge>
+                        )}
+                      </span>
+                      <Badge variant="outline" className={`border-0 text-xs ${STATUS_COLORS[item.status] ?? "bg-gray-100 text-gray-700"}`}>
+                        {DELIVERY_REQUEST_STATUS_LABELS[item.status as DeliveryRequestStatus] ?? prettify(item.status)}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-700">{item.pickup_city} → {item.delivery_city}</p>
+                    <div className="flex gap-2 text-xs text-gray-500 mt-1">
+                      <span>{item.consigner_name}</span>
+                      <span>·</span><span>{item.total_bids_count} bids</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+          <Pagination total={total} offset={offset} onOffsetChange={onOffsetChange} />
+        </>
+      )}
+    </>
   );
 }
 

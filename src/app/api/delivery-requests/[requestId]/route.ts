@@ -44,5 +44,11 @@ export async function GET(
     return NextResponse.json({ ok: false, message: "Auction not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, data: result });
+  // Flag enterprise-operated auctions so the UI can badge + hide ERP actions.
+  const { data: flag } = await actorResult.supabase.rpc(
+    "is_enterprise_v1",
+    { p_request_id: requestId } as never,
+  );
+
+  return NextResponse.json({ ok: true, data: { ...result, is_enterprise: flag === true } });
 }

@@ -224,6 +224,7 @@ function CreatePortalUserDialog({
     fullName: "",
     email: "",
     password: "",
+    contactPhone: "",
     role: "viewer" as "viewer" | "manager",
     active: true,
   });
@@ -234,6 +235,7 @@ function CreatePortalUserDialog({
         fullName: form.fullName.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password,
+        contactPhone: form.contactPhone.trim() || undefined,
         role: form.role,
         active: form.active,
       }),
@@ -288,6 +290,21 @@ function CreatePortalUserDialog({
             />
             <p className="text-[11px] text-gray-400">
               Share this with the customer. They can change it after first login.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Company phone (shown to drivers)</Label>
+            <Input
+              type="tel"
+              className="h-8 text-sm"
+              value={form.contactPhone}
+              maxLength={20}
+              onChange={(e) => setForm((p) => ({ ...p, contactPhone: e.target.value }))}
+              placeholder="e.g. 9876543210"
+            />
+            <p className="text-[11px] text-gray-400">
+              Drivers see the company name &amp; this number for this customer&apos;s enterprise trips
+              (instead of the AiravatL number).
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 items-end">

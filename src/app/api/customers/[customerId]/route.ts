@@ -64,6 +64,7 @@ export async function GET(_: Request, context: RouteParams) {
       source: str(row.source),
       internalNotes: str(row.internal_notes),
       phone: str(row.phone),
+      contactPhone: str(row.contact_phone),
       email: str(row.email),
       contactName: str(row.contact_name),
       businessName: str(row.business_name),
@@ -107,6 +108,21 @@ export async function PATCH(request: Request, context: RouteParams) {
   if (error) {
     if (isMissingRpcError(error)) return NextResponse.json({ ok: false, message: "Missing RPC" }, { status: 500 });
     return mapCustomerRpcError(error.message ?? "Update failed", error.code);
+  }
+
+  // Company phone shown to drivers for enterprise trips — separate setter.
+  if (body.contactPhone !== undefined) {
+    const { error: phoneError } = await actorResult.supabase.rpc(
+      "admin_set_consigner_contact_phone_v1",
+      {
+        p_consigner_id: customerId,
+        p_contact_phone: body.contactPhone ?? null,
+        p_actor_user_id: actorResult.actor.id,
+      } as never,
+    );
+    if (phoneError) {
+      return mapCustomerRpcError(phoneError.message ?? "Unable to save phone", phoneError.code);
+    }
   }
 
   return NextResponse.json({ ok: true, data });

@@ -32,7 +32,10 @@ interface CreateBody {
   password?: unknown;
   role?: unknown;
   active?: unknown;
+  contactPhone?: unknown;
 }
+
+const CONTACT_PHONE_MAX_LENGTH = 20;
 
 interface RouteParams {
   params: Promise<{ customerId: string }>;
@@ -104,6 +107,7 @@ export async function POST(request: Request, context: RouteParams) {
   const password = typeof body?.password === "string" ? body.password : "";
   const role = typeof body?.role === "string" ? body.role : "viewer";
   const active = typeof body?.active === "boolean" ? body.active : true;
+  const contactPhone = typeof body?.contactPhone === "string" ? body.contactPhone.trim() : "";
 
   if (!fullName || !email || !password) {
     return NextResponse.json(
@@ -132,6 +136,12 @@ export async function POST(request: Request, context: RouteParams) {
   if (!ALLOWED_ROLES.includes(role as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ ok: false, message: "Invalid role" }, { status: 400 });
   }
+  if (contactPhone.length > CONTACT_PHONE_MAX_LENGTH) {
+    return NextResponse.json(
+      { ok: false, message: `Phone must be at most ${CONTACT_PHONE_MAX_LENGTH} characters` },
+      { status: 400 },
+    );
+  }
 
   const { data: createdAuthUser, error: createAuthError } = await adminClient.auth.admin.createUser({
     email,
@@ -158,6 +168,7 @@ export async function POST(request: Request, context: RouteParams) {
       p_role: role,
       p_active: active,
       p_actor_user_id: actorResult.actor.id,
+      p_contact_phone: contactPhone || null,
     } as never,
   );
 

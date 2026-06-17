@@ -54,7 +54,7 @@ export default function CustomerDetailPage() {
   const [editForm, setEditForm] = useState({
     registeredName: "", billingAddress: "", gstin: "", panNumber: "",
     natureOfBusiness: "", contactDesignation: "", routeSummary: "",
-    creditDays: "", creditLimit: "", internalNotes: "",
+    creditDays: "", creditLimit: "", internalNotes: "", contactPhone: "",
   });
 
   const customerQuery = useQuery({
@@ -87,6 +87,7 @@ export default function CustomerDetailPage() {
       creditDays: editForm.creditDays ? Number(editForm.creditDays) : undefined,
       creditLimit: editForm.creditLimit ? Number(editForm.creditLimit) : undefined,
       internalNotes: editForm.internalNotes.trim() || undefined,
+      contactPhone: editForm.contactPhone.trim(),
     }),
     onSuccess: () => {
       setEditOpen(false);
@@ -108,6 +109,7 @@ export default function CustomerDetailPage() {
       creditDays: String(c.creditDays ?? 0),
       creditLimit: String(c.creditLimit ?? 0),
       internalNotes: c.internalNotes ?? "",
+      contactPhone: c.contactPhone ?? "",
     });
     setEditOpen(true);
     editMutation.reset();
@@ -332,6 +334,15 @@ export default function CustomerDetailPage() {
                 <Input type="number" className="h-8 text-sm" value={editForm.creditDays} onChange={(e) => setEditForm((p) => ({ ...p, creditDays: e.target.value }))} /></div>
               <div className="space-y-1"><Label className="text-xs">Credit Limit (₹)</Label>
                 <Input type="number" className="h-8 text-sm" value={editForm.creditLimit} onChange={(e) => setEditForm((p) => ({ ...p, creditLimit: e.target.value }))} /></div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Company phone (shown to drivers)</Label>
+              <Input type="tel" className="h-8 text-sm" value={editForm.contactPhone} maxLength={20}
+                onChange={(e) => setEditForm((p) => ({ ...p, contactPhone: e.target.value }))}
+                placeholder="e.g. 9876543210" />
+              <p className="text-[11px] text-gray-400">
+                Drivers see the company name &amp; this number for this customer&apos;s enterprise trips.
+              </p>
             </div>
             <div className="space-y-1"><Label className="text-xs">Internal Notes</Label>
               <Textarea className="text-sm resize-none" rows={2} value={editForm.internalNotes} onChange={(e) => setEditForm((p) => ({ ...p, internalNotes: e.target.value }))} maxLength={500} /></div>

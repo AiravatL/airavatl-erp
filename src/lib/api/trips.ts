@@ -278,6 +278,8 @@ export interface AuctionTripDetail {
   delivery_request_status: string;
   request_id: string;
   request_number: string;
+  // True when the trip is operated by an enterprise consigner (ERP read-only).
+  is_enterprise?: boolean;
 }
 
 export interface ListAuctionTripsFilters {

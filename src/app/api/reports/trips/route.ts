@@ -8,6 +8,7 @@ export async function GET(request: Request) {
   if ("error" in actorResult) return actorResult.error;
 
   const { search, status, limit, offset } = parsePaginationParams(request);
+  const source = new URL(request.url).searchParams.get("source")?.trim() || null;
 
   const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc(
     "admin_list_app_trips_v1",
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
       p_search: search,
       p_limit: limit,
       p_offset: offset,
+      p_source: source,
     } as never,
   );
 
@@ -27,6 +29,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, message: rpcError.message ?? "Unable to fetch trips" }, { status: 500 });
   }
 
-  const result = (rpcData ?? {}) as { total?: number; items?: unknown[] };
-  return NextResponse.json({ ok: true, data: { total: result.total ?? 0, items: result.items ?? [] } });
+  const result = (rpcData ?? {}) as { total?: number; items?: Array<Record<string, unknown>> };
+  // is_enterprise now comes straight from the RPC row.
+  return NextResponse.json({
+    ok: true,
+    data: { total: result.total ?? 0, items: result.items ?? [] },
+  });
 }

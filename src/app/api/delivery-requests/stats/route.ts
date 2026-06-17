@@ -28,12 +28,13 @@ export async function GET() {
     return mapRpcError(rpcError.message ?? "Unable to load auction stats", rpcError.code);
   }
 
-  const result = (rpcData ?? {}) as { erp?: StatsRow; app?: StatsRow };
+  const result = (rpcData ?? {}) as { erp?: StatsRow; app?: StatsRow; enterprise?: StatsRow };
   return NextResponse.json({
     ok: true,
     data: {
       erp: { open: result.erp?.open ?? 0, active: result.erp?.active ?? 0 },
       app: { open: result.app?.open ?? 0, active: result.app?.active ?? 0 },
+      enterprise: { open: result.enterprise?.open ?? 0, active: result.enterprise?.active ?? 0 },
     },
   });
 }

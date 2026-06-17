@@ -65,6 +65,7 @@ export interface AppTripItem {
   pickupCity: string;
   deliveryCity: string;
   createdAt: string;
+  isEnterprise?: boolean;
 }
 
 export interface PaymentItem {
@@ -239,6 +240,7 @@ function normalizeTrip(row: Record<string, unknown>): AppTripItem {
     pickupCity: str(row.pickup_city),
     deliveryCity: str(row.delivery_city),
     createdAt: str(row.created_at),
+    isEnterprise: row.is_enterprise === true,
   };
 }
 
@@ -362,6 +364,7 @@ export interface AppTripFilters {
   search?: string;
   limit?: number;
   offset?: number;
+  source?: "erp" | "app" | "enterprise";
 }
 
 export async function listAppTrips(filters: AppTripFilters = {}): Promise<PaginatedResponse<AppTripItem>> {

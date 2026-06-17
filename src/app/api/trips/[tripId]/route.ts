@@ -35,5 +35,14 @@ export async function GET(
     return NextResponse.json({ ok: false, message: "Trip not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, data: rpcData });
+  // Flag enterprise-operated trips so the UI can badge + hide ERP actions.
+  const { data: flag } = await actorResult.supabase.rpc(
+    "is_enterprise_v1",
+    { p_trip_id: tripId } as never,
+  );
+
+  return NextResponse.json({
+    ok: true,
+    data: { ...(rpcData as Record<string, unknown>), is_enterprise: flag === true },
+  });
 }

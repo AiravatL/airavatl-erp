@@ -29,6 +29,7 @@ export interface CustomerDetail extends CustomerListItem {
   source: string | null;
   internalNotes: string | null;
   phone: string | null;
+  contactPhone: string | null;
   email: string | null;
   contactName: string | null;
   businessName: string | null;
@@ -187,6 +188,7 @@ export interface UpdateCustomerInput {
   creditLimit?: number;
   internalNotes?: string;
   active?: boolean;
+  contactPhone?: string;
 }
 
 export async function updateCustomer(customerId: string, input: UpdateCustomerInput) {

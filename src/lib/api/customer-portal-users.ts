@@ -19,6 +19,9 @@ export interface CreateCustomerPortalUserInput {
   password: string;
   role: "viewer" | "manager";
   active: boolean;
+  // Company phone shown to drivers in the partner app for this customer's
+  // enterprise trips (in place of AiravatL's number).
+  contactPhone?: string;
 }
 
 export interface UpdateCustomerPortalUserInput {

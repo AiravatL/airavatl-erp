@@ -91,11 +91,14 @@ export default function AuctionDetailPage({
   const bids = data?.bids ?? [];
   const erpMetadata = data?.erp_metadata;
   const isErpAuction = !!erpMetadata;
+  // Enterprise auctions are operated by the consigner in their portal — ERP is
+  // read-only here (operational RPCs also refuse these rows server-side).
+  const isEnterprise = data?.is_enterprise === true;
 
   const status = req?.status as DeliveryRequestStatus | undefined;
   const statusLabel = status ? (DELIVERY_REQUEST_STATUS_LABELS[status] ?? status) : "";
   const statusColor = status ? (STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700") : "";
-  const canSelectWinner = (status === "active" || status === "ended") && bids.some((b) => b.status === "active");
+  const canSelectWinner = !isEnterprise && (status === "active" || status === "ended") && bids.some((b) => b.status === "active");
 
   // Fetch commission settings for ERP auctions
   const commissionQuery = useQuery({
@@ -189,14 +192,24 @@ export default function AuctionDetailPage({
             <Badge variant="outline" className={`border-0 font-medium text-xs ${statusColor}`}>
               {statusLabel}
             </Badge>
+            {isEnterprise && (
+              <Badge variant="outline" className="border-0 font-medium text-xs bg-violet-100 text-violet-700">
+                Enterprise
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-gray-500">
             {req.pickup_city as string} → {req.delivery_city as string} · {vehicleLabel}
             {req.estimated_distance_km ? ` · ${req.estimated_distance_km} km` : ""}
           </p>
+          {isEnterprise && (
+            <p className="text-xs text-violet-600 mt-0.5">
+              Operated by the enterprise consigner — monitoring only.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          {status === "active" && bids.length === 0 && (
+          {!isEnterprise && status === "active" && bids.length === 0 && (
             <Link href={`/delivery-requests/new?edit=${requestId}`}>
               <Button variant="outline" className="h-9 text-sm">
                 <Pencil className="h-4 w-4 mr-1.5" />
@@ -204,7 +217,7 @@ export default function AuctionDetailPage({
               </Button>
             </Link>
           )}
-          {status === "active" && (
+          {!isEnterprise && status === "active" && (
             <Button
               variant="outline"
               className="h-9 text-sm text-red-600 border-red-200 hover:bg-red-50"
