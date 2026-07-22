@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ type WeightUnit = "ton" | "kg";
 export default function CreateDeliveryRequestPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const sessionToken = useMemo(() => crypto.randomUUID(), []);
@@ -118,6 +119,20 @@ export default function CreateDeliveryRequestPage() {
   const [auctionDurationMinutes, setAuctionDurationMinutes] = useState("60");
 
   const [internalNotes, setInternalNotes] = useState("");
+
+  // Quick (instant) requests have their own module: this same form component
+  // is re-exported at /quick-requests/new, where the fixed driver payout +
+  // consigner amount are set and drivers accept instead of bidding.
+  // Edit mode is auction-only.
+  const [fixedDriverAmount, setFixedDriverAmount] = useState("");
+  const [consignerAmount, setConsignerAmount] = useState("");
+  const isInstant = pathname.startsWith("/quick-requests") && !isEditMode;
+  const listPath = isInstant ? "/quick-requests" : "/delivery-requests";
+
+  // No minimum-commission rule for quick requests — ops sets both amounts
+  // explicitly and any positive consigner amount is accepted.
+  const driverAmountNum = Number(fixedDriverAmount) || 0;
+  const consignerAmountNum = Number(consignerAmount) || 0;
 
   // Pre-fill in edit/repeat mode
   const [editLoaded, setEditLoaded] = useState(false);
@@ -273,7 +288,8 @@ export default function CreateDeliveryRequestPage() {
     delivery !== null &&
     vehicleMasterTypeId !== "" &&
     consignmentDate !== "" &&
-    consignmentDate >= today;
+    consignmentDate >= today &&
+    (!isInstant || (driverAmountNum > 0 && consignerAmountNum > 0));
 
   // Build consignment datetime from date + optional time
   const consignmentDateTime = consignmentDate
@@ -353,6 +369,14 @@ export default function CreateDeliveryRequestPage() {
         consignmentDate: consignmentDateTime,
         auctionDurationMinutes: Number(auctionDurationMinutes),
         internalNotes: internalNotes.trim() || undefined,
+        ...(isInstant
+          ? {
+              requestType: "instant" as const,
+              fixedDriverAmount: driverAmountNum,
+              consignerAmount: consignerAmountNum,
+              acceptWindowMinutes: Number(auctionDurationMinutes),
+            }
+          : {}),
       });
     },
     onSuccess: async (result) => {
@@ -373,7 +397,7 @@ export default function CreateDeliveryRequestPage() {
           console.warn("Failed to link trip request to auction:", linkErr);
         }
       }
-      router.push(`/delivery-requests/${id}`);
+      router.push(`${listPath}/${id}`);
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : isEditMode ? "Failed to update auction" : "Failed to create delivery request");
@@ -389,8 +413,8 @@ export default function CreateDeliveryRequestPage() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
-        title={isEditMode ? "Edit Auction" : isRepeatMode ? "Repeat Auction" : fromTripRequestId ? "Create Auction from Trip Request" : "Create Delivery Request"}
-        description={isEditMode ? "Modify auction details (only before any bids)" : isRepeatMode ? "Create a new auction with pre-filled details from the previous one" : fromTripRequestId ? "Filling in vehicle, date, and auction duration to convert this request into an auction" : "Create an auction for drivers to bid on"}
+        title={isEditMode ? "Edit Auction" : isRepeatMode ? "Repeat Auction" : fromTripRequestId ? "Create Auction from Trip Request" : isInstant ? "Create Quick Request" : "Create Delivery Request"}
+        description={isEditMode ? "Modify auction details (only before any bids)" : isRepeatMode ? "Create a new auction with pre-filled details from the previous one" : fromTripRequestId ? "Filling in vehicle, date, and auction duration to convert this request into an auction" : isInstant ? "Fixed-price request — drivers accept, then you pick one" : "Create an auction for drivers to bid on"}
       />
 
       {fromTripRequestId && tripRequestQuery.data && (
@@ -640,9 +664,56 @@ export default function CreateDeliveryRequestPage() {
               </div>
             </div>
 
+            {/* Section 5b: Pricing (quick requests only) */}
+            {isInstant && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Pricing</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium">
+                      Driver Payout (₹) <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="e.g. 10000"
+                      value={fixedDriverAmount}
+                      onChange={(e) => setFixedDriverAmount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                      className="h-9 text-sm"
+                    />
+                    <p className="text-[11px] text-gray-400">
+                      Shown to drivers in the app — they accept at this amount
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-medium">
+                      Consigner Amount (₹) <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="e.g. 11000"
+                      value={consignerAmount}
+                      onChange={(e) => setConsignerAmount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                      className="h-9 text-sm"
+                    />
+                    <p className="text-[11px] text-gray-400">
+                      What the consigner is billed — not visible to drivers
+                    </p>
+                  </div>
+                </div>
+                {driverAmountNum > 0 && consignerAmountNum > 0 && (
+                  <p className={cn("mt-2 text-xs", consignerAmountNum >= driverAmountNum ? "text-gray-500" : "text-red-600")}>
+                    Margin: ₹{(consignerAmountNum - driverAmountNum).toLocaleString("en-IN")}
+                    {" "}({(((consignerAmountNum - driverAmountNum) / consignerAmountNum) * 100).toFixed(1)}%)
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Section 6: Schedule & Auction */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Schedule & Auction</h3>
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">{isInstant ? "Schedule & Accept Window" : "Schedule & Auction"}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* Consignment Date — Popover + Calendar. User never types; a
                  *  click opens the picker. Past dates are disabled. */}
@@ -736,7 +807,7 @@ export default function CreateDeliveryRequestPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Auction Duration</Label>
+                  <Label className="text-sm font-medium">{isInstant ? "Accept Window" : "Auction Duration"}</Label>
                   <Select value={auctionDurationMinutes} onValueChange={setAuctionDurationMinutes}>
                     <SelectTrigger className="w-full h-9 text-sm"><SelectValue placeholder="Select duration" /></SelectTrigger>
                     <SelectContent>
@@ -745,6 +816,9 @@ export default function CreateDeliveryRequestPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {isInstant && (
+                    <p className="text-[11px] text-gray-400">How long drivers can accept before it expires</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -762,13 +836,13 @@ export default function CreateDeliveryRequestPage() {
 
             {/* Actions */}
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => router.push("/delivery-requests")}
+              <Button variant="outline" onClick={() => router.push(listPath)}
                 className="h-9 text-sm" disabled={createMutation.isPending}>
                 <X className="h-4 w-4 mr-1.5" /> Cancel
               </Button>
               <Button onClick={handleSubmit} disabled={!isValid || createMutation.isPending} className="h-9 text-sm">
                 {createMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-                {isEditMode ? "Save Changes" : "Create Auction"}
+                {isEditMode ? "Save Changes" : isInstant ? "Create Quick Request" : "Create Auction"}
               </Button>
             </div>
           </div>

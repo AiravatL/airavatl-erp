@@ -21,6 +21,7 @@ import {
   Truck,
   ChevronDown,
   MapPin,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Trip Requests", href: "/trip-requests", icon: ClipboardList, roles: ["super_admin", "admin", "operations", "sales_consigner"] },
   { label: "Auctions", href: "/delivery-requests", icon: PackagePlus, roles: ["super_admin", "admin", "operations"] },
+  { label: "Quick Requests", href: "/quick-requests", icon: Zap, roles: ["super_admin", "admin", "operations"] },
   { label: "Trips", href: "/trips", icon: Truck, roles: ["super_admin", "admin", "operations"] },
   { label: "Fleet", href: "/fleet", icon: Building2, roles: ["super_admin", "admin", "operations", "sales_vehicles"] },
   { label: "Live Map", href: "/fleet/live-map", icon: MapPin, roles: ["super_admin", "admin", "operations"] },

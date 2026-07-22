@@ -72,6 +72,8 @@ export default function DeliveryRequestsPage() {
     search: erpDebouncedSearch || undefined,
     status: erpStatus || undefined,
     source: "erp" as const,
+    // Quick (instant) requests have their own /quick-requests module
+    requestType: "auction" as const,
     limit: PAGE_SIZE,
     offset: erpOffset,
   }), [erpDebouncedSearch, erpStatus, erpOffset]);
@@ -99,6 +101,7 @@ export default function DeliveryRequestsPage() {
     search: appDebouncedSearch || undefined,
     status: appStatus || undefined,
     source: "app" as const,
+    requestType: "auction" as const,
     limit: PAGE_SIZE,
     offset: appOffset,
   }), [appDebouncedSearch, appStatus, appOffset]);
@@ -124,6 +127,7 @@ export default function DeliveryRequestsPage() {
     search: entDebouncedSearch || undefined,
     status: entStatus || undefined,
     source: "enterprise" as const,
+    requestType: "auction" as const,
     limit: PAGE_SIZE,
     offset: entOffset,
   }), [entDebouncedSearch, entStatus, entOffset]);

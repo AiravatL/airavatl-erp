@@ -60,6 +60,8 @@ export const queryKeys = {
     search?: string;
     status?: string;
     source?: string;
+    requestType?: string;
+    view?: string;
     limit?: number;
     offset?: number;
   }) => ["delivery-requests", "list", filters] as const,

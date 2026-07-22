@@ -12,6 +12,9 @@ export async function GET(request: Request) {
   const search = searchParams.get("search")?.trim() || null;
   const status = searchParams.get("status")?.trim() || null;
   const source = searchParams.get("source")?.trim() || null;
+  const requestTypeParam = searchParams.get("requestType")?.trim() || null;
+  const requestType =
+    requestTypeParam === "auction" || requestTypeParam === "instant" ? requestTypeParam : null;
   const limit = Number(searchParams.get("limit") ?? 50);
   const offset = Number(searchParams.get("offset") ?? 0);
 
@@ -22,6 +25,7 @@ export async function GET(request: Request) {
       p_search: search,
       p_status: status,
       p_source: source,
+      p_request_type: requestType,
       p_limit: Number.isFinite(limit) ? Math.max(1, Math.min(limit, 200)) : 50,
       p_offset: Number.isFinite(offset) ? Math.max(0, offset) : 0,
     } as never,
@@ -99,6 +103,11 @@ interface CreateBody {
   consignmentDate?: string;
   auctionDurationMinutes?: number;
   internalNotes?: string;
+  // Quick (instant) requests
+  requestType?: string;
+  fixedDriverAmount?: number;
+  consignerAmount?: number;
+  acceptWindowMinutes?: number;
 }
 
 export async function POST(request: Request) {
@@ -157,7 +166,25 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc("auction_create_v1", {
+  // Quick (instant) requests carry fixed amounts and use a dedicated RPC;
+  // everything else about the payload is shared with auctions.
+  const isInstant = body.requestType === "instant";
+  if (isInstant) {
+    if (!body.fixedDriverAmount || body.fixedDriverAmount <= 0) {
+      return NextResponse.json(
+        { ok: false, message: "Driver payout amount must be greater than 0" },
+        { status: 400 },
+      );
+    }
+    if (!body.consignerAmount || body.consignerAmount <= 0) {
+      return NextResponse.json(
+        { ok: false, message: "Consigner amount must be greater than 0" },
+        { status: 400 },
+      );
+    }
+  }
+
+  const commonParams = {
     p_actor_user_id: actorResult.actor.id,
     p_consigner_profile_id: body.consignerProfileId ?? null,
     // Pickup
@@ -196,23 +223,42 @@ export async function POST(request: Request) {
     p_special_instructions: body.specialInstructions ?? null,
     // Schedule
     p_consignment_date: body.consignmentDate,
-    // Auction
-    p_auction_duration_minutes: body.auctionDurationMinutes ?? 60,
     // Internal
     p_internal_notes: body.internalNotes ?? null,
-  } as never);
+  };
+
+  const rpcName = isInstant ? "instant_request_create_v1" : "auction_create_v1";
+  const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc(
+    rpcName,
+    (isInstant
+      ? {
+          ...commonParams,
+          p_fixed_driver_amount: body.fixedDriverAmount,
+          p_consigner_amount: body.consignerAmount,
+          p_accept_window_minutes: body.acceptWindowMinutes ?? 60,
+        }
+      : {
+          ...commonParams,
+          p_auction_duration_minutes: body.auctionDurationMinutes ?? 60,
+        }) as never,
+  );
 
   if (rpcError) {
     if (isMissingRpcError(rpcError)) {
       return NextResponse.json(
-        { ok: false, message: "Missing RPC: auction_create_v1" },
+        { ok: false, message: `Missing RPC: ${rpcName}` },
         { status: 500 },
       );
     }
     return mapRpcError(rpcError.message ?? "Unable to create delivery request", rpcError.code);
   }
 
-  const result = rpcData as { request_id: string; request_number: string; auction_end_time: string } | null;
+  const result = rpcData as {
+    request_id: string;
+    request_number: string;
+    auction_end_time?: string;
+    accept_deadline?: string;
+  } | null;
   if (!result) {
     return NextResponse.json(
       { ok: false, message: "Unable to create delivery request" },
@@ -226,7 +272,7 @@ export async function POST(request: Request) {
       data: {
         requestId: result.request_id,
         requestNumber: result.request_number,
-        auctionEndTime: result.auction_end_time,
+        auctionEndTime: result.auction_end_time ?? result.accept_deadline ?? null,
       },
     },
     { status: 201 },

@@ -34,6 +34,12 @@ export interface CreateDeliveryRequestInput {
   consignmentDate: string;
   auctionDurationMinutes?: number;
   internalNotes?: string;
+  // Quick (instant) requests: fixed driver payout + consigner amount are
+  // entered at creation; drivers accept instead of bidding.
+  requestType?: "auction" | "instant";
+  fixedDriverAmount?: number;
+  consignerAmount?: number;
+  acceptWindowMinutes?: number;
 }
 
 export interface CreateDeliveryRequestResult {
@@ -83,6 +89,8 @@ export interface AuctionListItem {
   id: string;
   request_number: string;
   status: string;
+  request_type?: "auction" | "instant";
+  fixed_driver_amount?: number | null;
   pickup_city: string;
   pickup_state: string | null;
   delivery_city: string;
@@ -130,6 +138,11 @@ export interface AuctionBidRow {
   bid_notes: string | null;
   created_at: string;
   updated_at: string;
+  // Quick (instant) requests: GPS snapshot at accept time + haversine
+  // distance from the pickup point (null when location was unavailable).
+  accept_latitude?: number | null;
+  accept_longitude?: number | null;
+  distance_km?: number | null;
 }
 
 export interface AuctionDetailResponse {
@@ -141,6 +154,8 @@ export interface AuctionDetailResponse {
     consigner_profile_id: string | null;
     consigner_profile_name: string | null;
     internal_notes: string | null;
+    // Consigner amount fixed at creation for quick (instant) requests.
+    consigner_amount?: number | null;
     created_at: string;
   } | null;
   trip_metadata: {
@@ -171,6 +186,7 @@ export async function listDeliveryRequests(filters: {
   search?: string;
   status?: string;
   source?: string;
+  requestType?: string;
   limit?: number;
   offset?: number;
 }): Promise<AuctionListResponse> {
@@ -178,6 +194,7 @@ export async function listDeliveryRequests(filters: {
   if (filters.search) params.set("search", filters.search);
   if (filters.status) params.set("status", filters.status);
   if (filters.source) params.set("source", filters.source);
+  if (filters.requestType) params.set("requestType", filters.requestType);
   if (filters.limit) params.set("limit", String(filters.limit));
   if (filters.offset) params.set("offset", String(filters.offset));
   const query = params.toString();
@@ -221,6 +238,22 @@ export async function selectAuctionWinner(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bid_id: bidId, consigner_trip_amount: consignerTripAmount }),
+    },
+  );
+}
+
+// Quick (instant) requests — ops picks an acceptor; both amounts were fixed
+// at creation so no consigner amount is sent here.
+export async function selectInstantDriver(
+  requestId: string,
+  bidId: string,
+): Promise<SelectWinnerResult> {
+  return apiRequest<SelectWinnerResult>(
+    `/api/delivery-requests/${encodeURIComponent(requestId)}/select-winner`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bid_id: bidId, instant: true }),
     },
   );
 }

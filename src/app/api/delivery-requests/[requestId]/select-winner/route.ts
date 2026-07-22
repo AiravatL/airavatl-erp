@@ -19,29 +19,41 @@ export async function POST(
   const body = (await request.json().catch(() => null)) as {
     bid_id?: string;
     consigner_trip_amount?: number;
+    // Quick (instant) requests: amounts were fixed at creation, so the client
+    // sends no amount; the RPC reads the stored consigner amount (and rejects
+    // non-instant requests server-side).
+    instant?: boolean;
   } | null;
 
   if (!body?.bid_id) {
     return NextResponse.json({ ok: false, message: "Bid ID is required" }, { status: 400 });
   }
-  if (!body.consigner_trip_amount || body.consigner_trip_amount <= 0) {
+  const isInstant = body.instant === true;
+  if (!isInstant && (!body.consigner_trip_amount || body.consigner_trip_amount <= 0)) {
     return NextResponse.json({ ok: false, message: "Consigner trip amount must be greater than 0" }, { status: 400 });
   }
 
+  const rpcName = isInstant ? "instant_select_driver_v1" : "auction_select_winner_v1";
   const { data: rpcData, error: rpcError } = await actorResult.supabase.rpc(
-    "auction_select_winner_v1",
-    {
-      p_actor_user_id: actorResult.actor.id,
-      p_request_id: requestId,
-      p_bid_id: body.bid_id,
-      p_consigner_trip_amount: body.consigner_trip_amount,
-    } as never,
+    rpcName,
+    (isInstant
+      ? {
+          p_actor_user_id: actorResult.actor.id,
+          p_request_id: requestId,
+          p_bid_id: body.bid_id,
+        }
+      : {
+          p_actor_user_id: actorResult.actor.id,
+          p_request_id: requestId,
+          p_bid_id: body.bid_id,
+          p_consigner_trip_amount: body.consigner_trip_amount,
+        }) as never,
   );
 
   if (rpcError) {
     if (isMissingRpcError(rpcError)) {
       return NextResponse.json(
-        { ok: false, message: "Missing RPC: auction_select_winner_v1" },
+        { ok: false, message: `Missing RPC: ${rpcName}` },
         { status: 500 },
       );
     }

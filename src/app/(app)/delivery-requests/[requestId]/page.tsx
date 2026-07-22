@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { getDeliveryRequest, cancelDeliveryRequest, type AuctionBidRow, type AuctionDetailResponse } from "@/lib/api/delivery-requests";
+import { getDeliveryRequest, cancelDeliveryRequest, selectInstantDriver, type AuctionBidRow } from "@/lib/api/delivery-requests";
 import { apiRequest } from "@/lib/api/http";
 import { useAuth } from "@/lib/auth/auth-context";
 import { AdminDeleteDialog } from "@/components/shared/admin-delete-dialog";
@@ -66,8 +66,14 @@ export default function AuctionDetailPage({
 }) {
   const { requestId } = use(params);
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  // This component is re-exported at /quick-requests/[requestId] — derive the
+  // module home from the URL so back links land in the right section.
+  const isQuickModule = pathname.startsWith("/quick-requests");
+  const backHref = isQuickModule ? "/quick-requests" : "/delivery-requests";
+  const backLabel = isQuickModule ? "Back to Quick Requests" : "Back to Delivery Requests";
   const isAdmin = user?.role === "super_admin" || user?.role === "admin";
   const isOps = user?.role === "operations";
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -94,17 +100,22 @@ export default function AuctionDetailPage({
   // Enterprise auctions are operated by the consigner in their portal — ERP is
   // read-only here (operational RPCs also refuse these rows server-side).
   const isEnterprise = data?.is_enterprise === true;
+  // Quick (instant) requests: fixed payout, drivers accept, ops picks one.
+  const isInstant = (req?.request_type as string) === "instant";
+  const fixedDriverAmount = (req?.fixed_driver_amount as number | null) ?? null;
+  const instantConsignerAmount = erpMetadata?.consigner_amount ?? null;
 
   const status = req?.status as DeliveryRequestStatus | undefined;
   const statusLabel = status ? (DELIVERY_REQUEST_STATUS_LABELS[status] ?? status) : "";
   const statusColor = status ? (STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700") : "";
   const canSelectWinner = !isEnterprise && (status === "active" || status === "ended") && bids.some((b) => b.status === "active");
 
-  // Fetch commission settings for ERP auctions
+  // Fetch commission settings for ERP auctions (quick requests fixed both
+  // amounts at creation, so no commission math is needed here).
   const commissionQuery = useQuery({
     queryKey: ["settings", "commission"],
     queryFn: () => apiRequest<{ commission_percentage: number; minimum_commission_percentage: number }>("/api/settings/commission"),
-    enabled: isErpAuction && canSelectWinner,
+    enabled: isErpAuction && canSelectWinner && !isInstant,
     staleTime: 5 * 60_000,
   });
   const commissionPct = commissionQuery.data?.commission_percentage ?? 10;
@@ -121,14 +132,16 @@ export default function AuctionDetailPage({
 
   const startTripMutation = useMutation({
     mutationFn: () =>
-      apiRequest<{ trip_id: string; trip_number: string }>(`/api/delivery-requests/${requestId}/select-winner`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bid_id: selectedBid?.id,
-          consigner_trip_amount: Number(consignerTripAmount),
-        }),
-      }),
+      isInstant
+        ? selectInstantDriver(requestId, selectedBid!.id)
+        : apiRequest<{ trip_id: string; trip_number: string }>(`/api/delivery-requests/${requestId}/select-winner`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              bid_id: selectedBid?.id,
+              consigner_trip_amount: Number(consignerTripAmount),
+            }),
+          }),
     onSuccess: (result) => {
       setStartTripOpen(false);
       queryClient.invalidateQueries({ queryKey: queryKeys.deliveryRequest(requestId) });
@@ -150,16 +163,16 @@ export default function AuctionDetailPage({
     return (
       <div className="p-4 sm:p-6 space-y-4">
         <Link
-          href="/delivery-requests"
+          href={backHref}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Delivery Requests
+          {backLabel}
         </Link>
         <Card>
           <CardContent className="p-6">
             <p className="text-sm text-red-600">
-              {fetchError instanceof Error ? fetchError.message : "Auction not found"}
+              {fetchError instanceof Error ? fetchError.message : "Request not found"}
             </p>
           </CardContent>
         </Card>
@@ -176,11 +189,11 @@ export default function AuctionDetailPage({
     <div className="p-4 sm:p-6 space-y-4">
       {/* Header */}
       <Link
-        href="/delivery-requests"
+        href={backHref}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to Delivery Requests
+        {backLabel}
       </Link>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -192,6 +205,11 @@ export default function AuctionDetailPage({
             <Badge variant="outline" className={`border-0 font-medium text-xs ${statusColor}`}>
               {statusLabel}
             </Badge>
+            {isInstant && (
+              <Badge variant="outline" className="border-0 font-medium text-xs bg-amber-100 text-amber-700">
+                Quick
+              </Badge>
+            )}
             {isEnterprise && (
               <Badge variant="outline" className="border-0 font-medium text-xs bg-violet-100 text-violet-700">
                 Enterprise
@@ -209,7 +227,7 @@ export default function AuctionDetailPage({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {!isEnterprise && status === "active" && bids.length === 0 && (
+          {!isEnterprise && !isInstant && status === "active" && bids.length === 0 && (
             <Link href={`/delivery-requests/new?edit=${requestId}`}>
               <Button variant="outline" className="h-9 text-sm">
                 <Pencil className="h-4 w-4 mr-1.5" />
@@ -352,8 +370,13 @@ export default function AuctionDetailPage({
           {/* Auction Status */}
           <Card>
             <CardContent className="p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Auction Status</h3>
-              <AuctionStatusSection req={req} />
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">{isInstant ? "Quick Request Status" : "Auction Status"}</h3>
+              <AuctionStatusSection
+                req={req}
+                isInstant={isInstant}
+                hideAmounts={isOps && isErpAuction}
+                consignerAmount={instantConsignerAmount}
+              />
             </CardContent>
           </Card>
 
@@ -361,11 +384,13 @@ export default function AuctionDetailPage({
           <Card>
             <CardContent className="p-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                Bids ({bids.length})
+                {isInstant ? "Acceptances" : "Bids"} ({bids.length})
               </h3>
               {bids.length === 0 ? (
                 <p className="text-sm text-gray-500 py-4 text-center">
-                  No bids yet{status === "active" ? " — waiting for drivers to bid" : ""}
+                  {isInstant
+                    ? `No acceptances yet${status === "active" ? " — waiting for drivers to accept" : ""}`
+                    : `No bids yet${status === "active" ? " — waiting for drivers to bid" : ""}`}
                 </p>
               ) : (
                 <>
@@ -378,9 +403,12 @@ export default function AuctionDetailPage({
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Bidder</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500">Type</th>
                           {!(isOps && isErpAuction) && (
-                            <th className="px-3 py-2 text-right font-medium text-gray-500">Bid Amount</th>
+                            <th className="px-3 py-2 text-right font-medium text-gray-500">{isInstant ? "Payout" : "Bid Amount"}</th>
                           )}
-                          {isErpAuction && canSelectWinner && (
+                          {isInstant && (
+                            <th className="px-3 py-2 text-right font-medium text-gray-500">Distance from Pickup</th>
+                          )}
+                          {!isInstant && isErpAuction && canSelectWinner && (
                             <>
                               <th className="px-3 py-2 text-right font-medium text-gray-500">Expected Amount</th>
                               <th className="px-3 py-2 text-right font-medium text-gray-500">Minimum Amount</th>
@@ -396,7 +424,8 @@ export default function AuctionDetailPage({
                           <BidTableRow key={bid.id} bid={bid} rank={idx + 1}
                             showActionColumn={isErpAuction && canSelectWinner}
                             hideBidAmount={isOps && isErpAuction}
-                            showTripAmounts={isErpAuction && canSelectWinner}
+                            showDistance={isInstant}
+                            showTripAmounts={!isInstant && isErpAuction && canSelectWinner}
                             commissionPct={commissionPct}
                             minCommissionPct={minCommissionPct}
                             canSelect={isErpAuction && canSelectWinner && bid.status === "active"}
@@ -410,7 +439,8 @@ export default function AuctionDetailPage({
                     {bids.map((bid, idx) => (
                       <BidMobileCard key={bid.id} bid={bid} rank={idx + 1}
                         hideBidAmount={isOps && isErpAuction}
-                        showTripAmounts={isErpAuction && canSelectWinner}
+                        showDistance={isInstant}
+                        showTripAmounts={!isInstant && isErpAuction && canSelectWinner}
                         commissionPct={commissionPct}
                         minCommissionPct={minCommissionPct}
                         canSelect={isErpAuction && canSelectWinner && bid.status === "active"}
@@ -495,12 +525,50 @@ export default function AuctionDetailPage({
           <DialogHeader>
             <DialogTitle className="text-base">Start Trip</DialogTitle>
             <DialogDescription>
-              Select <span className="font-semibold">{selectedBid?.bidder_name}</span> as the winner
-              and create a trip with bid amount <span className="font-semibold">{selectedBid ? formatCurrency(selectedBid.bid_amount) : ""}</span>.
+              {isInstant ? (
+                <>Assign this trip to <span className="font-semibold">{selectedBid?.bidder_name}</span>. Amounts were fixed when the request was created.</>
+              ) : (
+                <>Select <span className="font-semibold">{selectedBid?.bidder_name}</span> as the winner
+                and create a trip with bid amount <span className="font-semibold">{selectedBid ? formatCurrency(selectedBid.bid_amount) : ""}</span>.</>
+              )}
             </DialogDescription>
           </DialogHeader>
 
-          {(() => {
+          {isInstant ? (
+            <div className="space-y-3 py-2">
+              <div className="rounded-lg bg-gray-50 p-3 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Driver</span>
+                  <span className="text-gray-900">{selectedBid?.bidder_name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Distance from Pickup</span>
+                  <span className="text-gray-900">
+                    {selectedBid?.distance_km != null ? `${selectedBid.distance_km} km` : "—"}
+                  </span>
+                </div>
+                {!isOps && (
+                  <div className="border-t border-gray-200 pt-1.5 mt-1.5 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Driver Payout</span>
+                      <span className="font-medium text-gray-900">
+                        {fixedDriverAmount ? formatCurrency(fixedDriverAmount) : "—"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Consigner Amount</span>
+                      <span className="font-medium text-blue-700">
+                        {instantConsignerAmount ? formatCurrency(instantConsignerAmount) : "—"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">
+                The driver will get the trip request in the app and confirm it there.
+              </p>
+            </div>
+          ) : (() => {
             const bidAmt = selectedBid?.bid_amount ?? 0;
             const suggestedAmt = Math.round(bidAmt * (1 + commissionPct / 100));
             const minimumAmt = Math.round(bidAmt * (1 + minCommissionPct / 100));
@@ -576,9 +644,9 @@ export default function AuctionDetailPage({
               Cancel
             </Button>
             <Button size="sm"
-              disabled={!consignerTripAmount || Number(consignerTripAmount) <= 0
-                || Number(consignerTripAmount) < Math.round((selectedBid?.bid_amount ?? 0) * (1 + minCommissionPct / 100))
-                || startTripMutation.isPending}
+              disabled={startTripMutation.isPending
+                || (!isInstant && (!consignerTripAmount || Number(consignerTripAmount) <= 0
+                  || Number(consignerTripAmount) < Math.round((selectedBid?.bid_amount ?? 0) * (1 + minCommissionPct / 100))))}
               onClick={() => startTripMutation.mutate()}
               className="h-9 text-sm">
               {startTripMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Truck className="h-4 w-4 mr-1.5" />}
@@ -594,7 +662,7 @@ export default function AuctionDetailPage({
         onClose={() => setDeleteDialogOpen(false)}
         onDeleted={() => {
           queryClient.invalidateQueries({ queryKey: ["delivery-requests"] });
-          router.push("/delivery-requests");
+          router.push(backHref);
         }}
         type="auction"
         id={requestId}
@@ -614,12 +682,18 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AuctionStatusSection({ req }: { req: Record<string, unknown> }) {
+function AuctionStatusSection({ req, isInstant, hideAmounts, consignerAmount }: {
+  req: Record<string, unknown>;
+  isInstant?: boolean;
+  hideAmounts?: boolean;
+  consignerAmount?: number | null;
+}) {
   const status = req.status as string;
   const auctionEndTime = req.auction_end_time as string | null;
   const auctionDuration = req.auction_duration_minutes as number | null;
   const totalBids = (req.total_bids_count as number) ?? 0;
   const lowestBid = req.lowest_bid_amount as number | null;
+  const fixedDriverAmount = (req.fixed_driver_amount as number | null) ?? null;
 
   const [timeLeft, setTimeLeft] = useState("");
   const [progress, setProgress] = useState(0);
@@ -659,26 +733,47 @@ function AuctionStatusSection({ req }: { req: Record<string, unknown> }) {
 
   return (
     <div>
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className={`grid gap-3 mb-4 ${isInstant && !hideAmounts ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
         <div className="rounded-md border border-gray-100 p-3 text-center">
           <Timer className="h-4 w-4 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">Duration</p>
+          <p className="text-xs text-gray-500">{isInstant ? "Accept Window" : "Duration"}</p>
           <p className="text-sm font-semibold text-gray-900">
             {auctionDuration ? (auctionDuration >= 60 ? `${auctionDuration / 60}h` : `${auctionDuration}m`) : "—"}
           </p>
         </div>
         <div className="rounded-md border border-gray-100 p-3 text-center">
           <TrendingUp className="h-4 w-4 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">Bids</p>
+          <p className="text-xs text-gray-500">{isInstant ? "Acceptors" : "Bids"}</p>
           <p className="text-sm font-semibold text-gray-900">{totalBids}</p>
         </div>
-        <div className="rounded-md border border-gray-100 p-3 text-center">
-          <Clock className="h-4 w-4 text-gray-400 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">Lowest Bid</p>
-          <p className="text-sm font-semibold text-gray-900">
-            {lowestBid ? formatCurrency(lowestBid) : "—"}
-          </p>
-        </div>
+        {isInstant ? (
+          !hideAmounts && (
+            <>
+              <div className="rounded-md border border-gray-100 p-3 text-center">
+                <Clock className="h-4 w-4 text-gray-400 mx-auto mb-1" />
+                <p className="text-xs text-gray-500">Driver Payout</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {fixedDriverAmount ? formatCurrency(fixedDriverAmount) : "—"}
+                </p>
+              </div>
+              <div className="rounded-md border border-gray-100 p-3 text-center">
+                <TrendingUp className="h-4 w-4 text-gray-400 mx-auto mb-1" />
+                <p className="text-xs text-gray-500">Consigner Amount</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {consignerAmount ? formatCurrency(consignerAmount) : "—"}
+                </p>
+              </div>
+            </>
+          )
+        ) : (
+          <div className="rounded-md border border-gray-100 p-3 text-center">
+            <Clock className="h-4 w-4 text-gray-400 mx-auto mb-1" />
+            <p className="text-xs text-gray-500">Lowest Bid</p>
+            <p className="text-sm font-semibold text-gray-900">
+              {lowestBid ? formatCurrency(lowestBid) : "—"}
+            </p>
+          </div>
+        )}
       </div>
 
       {status === "active" && (
@@ -698,8 +793,9 @@ function AuctionStatusSection({ req }: { req: Record<string, unknown> }) {
 
       {status === "ended" && (
         <p className="text-sm text-amber-600">
-          Auction ended{auctionEndTime ? ` at ${formatDate(auctionEndTime)}` : ""}. Awaiting winner
-          selection.
+          {isInstant ? "Accept window closed" : "Auction ended"}
+          {auctionEndTime ? ` at ${formatDate(auctionEndTime)}` : ""}.{" "}
+          {isInstant ? "You can still pick a driver from the acceptances below." : "Awaiting winner selection."}
         </p>
       )}
 
@@ -722,8 +818,8 @@ function AuctionStatusSection({ req }: { req: Record<string, unknown> }) {
   );
 }
 
-function BidTableRow({ bid, rank, showActionColumn, hideBidAmount, showTripAmounts, commissionPct, minCommissionPct, canSelect, onSelect }: {
-  bid: AuctionBidRow; rank: number; showActionColumn?: boolean; hideBidAmount?: boolean; showTripAmounts?: boolean;
+function BidTableRow({ bid, rank, showActionColumn, hideBidAmount, showDistance, showTripAmounts, commissionPct, minCommissionPct, canSelect, onSelect }: {
+  bid: AuctionBidRow; rank: number; showActionColumn?: boolean; hideBidAmount?: boolean; showDistance?: boolean; showTripAmounts?: boolean;
   commissionPct?: number; minCommissionPct?: number; canSelect?: boolean; onSelect?: () => void;
 }) {
   const statusColor = BID_STATUS_COLORS[bid.status] ?? "bg-gray-100 text-gray-700";
@@ -749,6 +845,11 @@ function BidTableRow({ bid, rank, showActionColumn, hideBidAmount, showTripAmoun
       {!hideBidAmount && (
         <td className="px-3 py-2 text-right font-medium text-gray-900">
           {formatCurrency(bid.bid_amount)}
+        </td>
+      )}
+      {showDistance && (
+        <td className="px-3 py-2 text-right text-gray-700">
+          {bid.distance_km != null ? `${bid.distance_km} km` : "—"}
         </td>
       )}
       {showTripAmounts && (
@@ -780,8 +881,8 @@ function BidTableRow({ bid, rank, showActionColumn, hideBidAmount, showTripAmoun
   );
 }
 
-function BidMobileCard({ bid, rank, hideBidAmount, showTripAmounts, commissionPct, minCommissionPct, canSelect, onSelect }: {
-  bid: AuctionBidRow; rank: number; hideBidAmount?: boolean; showTripAmounts?: boolean;
+function BidMobileCard({ bid, rank, hideBidAmount, showDistance, showTripAmounts, commissionPct, minCommissionPct, canSelect, onSelect }: {
+  bid: AuctionBidRow; rank: number; hideBidAmount?: boolean; showDistance?: boolean; showTripAmounts?: boolean;
   commissionPct?: number; minCommissionPct?: number; canSelect?: boolean; onSelect?: () => void;
 }) {
   const statusColor = BID_STATUS_COLORS[bid.status] ?? "bg-gray-100 text-gray-700";
@@ -810,6 +911,12 @@ function BidMobileCard({ bid, rank, hideBidAmount, showTripAmounts, commissionPc
           <>
             <span>·</span>
             <span className="font-medium text-gray-900">{formatCurrency(bid.bid_amount)}</span>
+          </>
+        )}
+        {showDistance && (
+          <>
+            <span>·</span>
+            <span>{bid.distance_km != null ? `${bid.distance_km} km away` : "No location"}</span>
           </>
         )}
         <span>·</span>
