@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +30,7 @@ import {
   type PartnerPayoutStatus,
 } from "@/lib/api/verification";
 import { DevicePermissionsCard } from "@/app/(app)/fleet/user/[userId]/device-permissions-card";
+import { DeleteAppUserDialog } from "@/components/fleet/delete-app-user-dialog";
 import type { VerificationDetails } from "@/lib/types";
 import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
 import { queryKeys } from "@/lib/query/keys";
@@ -50,6 +51,7 @@ import {
   RefreshCw,
   Loader2,
   Pencil,
+  Trash2,
 } from "lucide-react";
 
 const TYPE_BADGE: Record<string, string> = {
@@ -69,9 +71,11 @@ function formatPhone(phone: string) {
 
 export default function PartnerDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userId = params.userId as string;
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.verificationDetail(userId),
@@ -151,15 +155,37 @@ export default function PartnerDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Fleet
         </Link>
-        {canViewVerification && (
-          <Link
-            href={`/verification/${userId}`}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
-          >
-            View in Verification <ExternalLink className="h-3 w-3" />
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          {canViewVerification && (
+            <Link
+              href={`/verification/${userId}`}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+            >
+              View in Verification <ExternalLink className="h-3 w-3" />
+            </Link>
+          )}
+          {canEditProfile && (
+            <button
+              onClick={() => setShowDeleteDialog(true)}
+              className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800"
+            >
+              <Trash2 className="h-3 w-3" /> Delete Account
+            </button>
+          )}
+        </div>
       </div>
+
+      <DeleteAppUserDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        userId={userId}
+        userName={detail.user.fullName}
+        userPhone={detail.user.phone}
+        onDeleted={() => {
+          queryClient.invalidateQueries({ queryKey: ["fleet", "app-users"] });
+          router.push("/fleet");
+        }}
+      />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-3">

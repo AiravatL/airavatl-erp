@@ -111,6 +111,7 @@ export async function listCustomers(filters: ListCustomersFilters = {}): Promise
 
 export interface AppConsigner {
   consignerId: string;
+  userId: string;
   fullName: string;
   businessName: string;
   phone: string;
@@ -138,6 +139,7 @@ export async function listAppConsigners(filters: { search?: string; limit?: numb
     total: raw.total,
     items: raw.items.map((r) => ({
       consignerId: String(r.consigner_id ?? ""),
+      userId: String(r.user_id ?? ""),
       fullName: String(r.full_name ?? ""),
       businessName: String(r.business_name ?? ""),
       phone: String(r.phone ?? ""),

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,8 @@ import { formatCurrency } from "@/lib/formatters";
 import { listCustomers, listAppConsigners, type CustomerListItem, type AppConsigner } from "@/lib/api/customers";
 import { queryKeys } from "@/lib/query/keys";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
-import { Search, Building2, Users } from "lucide-react";
+import { Search, Building2, Users, Trash2 } from "lucide-react";
+import { DeleteAppUserDialog } from "@/components/fleet/delete-app-user-dialog";
 
 export default function CustomersPage() {
   const { user } = useAuth();
@@ -47,6 +48,11 @@ export default function CustomersPage() {
   });
   const appConsigners = appQuery.data?.items ?? [];
   const appTotal = appQuery.data?.total ?? 0;
+
+  // Account deletion (wrong-app signups) — super_admin/admin only.
+  const queryClient = useQueryClient();
+  const canDeleteAppUsers = user?.role === "super_admin" || user?.role === "admin";
+  const [deleteTarget, setDeleteTarget] = useState<AppConsigner | null>(null);
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
@@ -141,7 +147,12 @@ export default function CustomersPage() {
           {appConsigners.length > 0 && (
             <>
               <div className="hidden sm:block">
-                <Card><CardContent className="p-0"><AppTable consigners={appConsigners} /></CardContent></Card>
+                <Card><CardContent className="p-0">
+                  <AppTable
+                    consigners={appConsigners}
+                    onDelete={canDeleteAppUsers ? setDeleteTarget : undefined}
+                  />
+                </CardContent></Card>
               </div>
               <div className="sm:hidden space-y-2">
                 {appConsigners.map((c) => (
@@ -153,9 +164,20 @@ export default function CustomersPage() {
                           <p className="text-xs text-gray-500">{c.fullName} · {c.phone}</p>
                           {c.city && <p className="text-[11px] text-gray-400">{c.city}{c.state ? `, ${c.state}` : ""}</p>}
                         </div>
-                        <Badge variant="outline" className={`text-[10px] border-0 ${c.isVerified ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                          {c.isVerified ? "Verified" : "Unverified"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={`text-[10px] border-0 ${c.isVerified ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                            {c.isVerified ? "Verified" : "Unverified"}
+                          </Badge>
+                          {canDeleteAppUsers && (
+                            <button
+                              onClick={() => setDeleteTarget(c)}
+                              className="p-1 text-gray-400 hover:text-red-600"
+                              aria-label={`Delete ${c.businessName}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="mt-1.5 flex gap-3 text-[11px] text-gray-500">
                         <span>{c.totalTrips} trips</span>
@@ -170,6 +192,20 @@ export default function CustomersPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {deleteTarget && (
+        <DeleteAppUserDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+          userId={deleteTarget.userId}
+          userName={deleteTarget.businessName || deleteTarget.fullName}
+          userPhone={deleteTarget.phone}
+          onDeleted={() => {
+            setDeleteTarget(null);
+            queryClient.invalidateQueries({ queryKey: ["customers", "app-consigners"] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -220,7 +256,13 @@ function ErpTable({ customers }: { customers: CustomerListItem[] }) {
 
 /* ---------- App Table ---------- */
 
-function AppTable({ consigners }: { consigners: AppConsigner[] }) {
+function AppTable({
+  consigners,
+  onDelete,
+}: {
+  consigners: AppConsigner[];
+  onDelete?: (c: AppConsigner) => void;
+}) {
   return (
     <table className="w-full text-sm">
       <thead>
@@ -231,6 +273,7 @@ function AppTable({ consigners }: { consigners: AppConsigner[] }) {
           <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Type</th>
           <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Trips</th>
           <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Status</th>
+          {onDelete && <th className="px-4 py-2.5" />}
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-50">
@@ -255,6 +298,18 @@ function AppTable({ consigners }: { consigners: AppConsigner[] }) {
                 {c.isVerified ? "Verified" : "Unverified"}
               </Badge>
             </td>
+            {onDelete && (
+              <td className="px-4 py-3 text-right">
+                <button
+                  onClick={() => onDelete(c)}
+                  className="p-1 text-gray-400 hover:text-red-600"
+                  aria-label={`Delete ${c.businessName}`}
+                  title="Delete account"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

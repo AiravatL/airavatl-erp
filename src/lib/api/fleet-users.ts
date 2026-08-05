@@ -57,3 +57,18 @@ export async function listAppUsers(
     { method: "GET", cache: "no-store" },
   );
 }
+
+/**
+ * Permanently delete an app user account. Server-side the RPC refuses
+ * accounts with any activity (trips, bids, requests, vehicles, drivers).
+ */
+export async function deleteAppUser(
+  userId: string,
+  reason?: string,
+): Promise<{ deleted: boolean }> {
+  return apiRequest<{ deleted: boolean }>(`/api/fleet/app-users/${userId}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: reason ?? null }),
+  });
+}
