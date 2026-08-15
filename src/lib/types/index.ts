@@ -510,18 +510,21 @@ export interface VerificationDetails {
   uploads: Partial<Record<VerificationUploadDocType, VerificationUploadSummary | null>>;
 }
 
+// Aadhaar and bank details are optional: partners can be verified without
+// them and the payout details added later. The server still enforces the
+// formats when supplied, and treats the bank trio as all-or-nothing.
 export interface SubmitDriverVerificationInput {
   licenseNumber: string;
   licenseExpiryDate?: string;
   dlPhotoKey?: string;
-  aadharNumber: string;
+  aadharNumber?: string;
   aadharPhotoKey?: string;
   registrationNumber: string;
   vehicleMasterTypeId: string;
   rcPhotoKey?: string;
-  bankAccountNumber: string;
-  bankIfscCode: string;
-  bankAccountHolderName: string;
+  bankAccountNumber?: string;
+  bankIfscCode?: string;
+  bankAccountHolderName?: string;
   upiId?: string;
   notes?: string;
 }
@@ -530,11 +533,11 @@ export interface SubmitTransporterVerificationInput {
   transportLicenseNumber: string;
   transportLicenseExpiry?: string;
   licensePhotoKey?: string;
-  aadharNumber: string;
+  aadharNumber?: string;
   aadharPhotoKey?: string;
-  bankAccountNumber: string;
-  bankIfscCode: string;
-  bankAccountHolderName: string;
+  bankAccountNumber?: string;
+  bankIfscCode?: string;
+  bankAccountHolderName?: string;
   upiId?: string;
   gstNumber?: string;
   panNumber?: string;

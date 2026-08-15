@@ -90,7 +90,8 @@ export interface SubmitVerificationResult {
   userId: string;
   verifiedAt: string;
   payoutOnboarding: {
-    status: "active" | "pending_razorpayx";
+    /** `not_provided` — verified without bank/UPI details; nothing to onboard. */
+    status: "active" | "pending_razorpayx" | "not_provided";
     razorpayxContactId?: string;
     razorpayxFundAccountId?: string;
     alreadyOnboarded?: boolean;

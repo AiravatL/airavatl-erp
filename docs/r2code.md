@@ -1,20 +1,3 @@
-// Cloudflare Worker code for ERP R2 presign service
-// Endpoints:
-// - POST /presign/put
-// - POST /presign/get
-//
-// Auth:
-// - Requires Authorization: Bearer <Supabase access token>
-// - Validates token using SUPABASE_URL + SUPABASE_ANON_KEY
-//
-// Required Worker vars/secrets:
-// - SUPABASE_URL
-// - SUPABASE_ANON_KEY
-// - R2_ACCOUNT_ID
-// - R2_BUCKET_NAME
-// - R2_ACCESS_KEY_ID (secret)
-// - R2_SECRET_ACCESS_KEY (secret)
-
 function cors(origin = "*") {
   return {
     "Access-Control-Allow-Origin": origin,
@@ -50,7 +33,10 @@ function toDateStamp(d) {
 }
 
 function encodeRfc3986(str) {
-  return encodeURIComponent(str).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  return encodeURIComponent(str).replace(
+    /[!'()*]/g,
+    (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase()
+  );
 }
 
 async function sha256Hex(data) {
@@ -60,7 +46,13 @@ async function sha256Hex(data) {
 }
 
 async function hmac(keyBytes, data) {
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
   return new Uint8Array(sig);
 }
@@ -70,21 +62,36 @@ async function getSigningKey(secretKey, dateStamp, region, service) {
   const kDate = await hmac(kSecret, dateStamp);
   const kRegion = await hmac(kDate, region);
   const kService = await hmac(kRegion, service);
-  return hmac(kService, "aws4_request");
+  const kSigning = await hmac(kService, "aws4_request");
+  return kSigning;
 }
 
 function bytesToHex(bytes) {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function buildKey({ tripId, docType, ext }) {
+// Legacy trip format remains supported:
+// trips/{tripId}/{docType}-{timestamp}.{ext}
+function buildTripKey({ tripId, docType, ext }) {
   return `trips/${tripId}/${docType}-${Date.now()}.${ext}`;
 }
 
-async function getSupabaseUser(request, env) {
+function normalizeObjectKey(objectKey) {
+  return typeof objectKey === "string" ? objectKey.trim() : "";
+}
+
+function isValidObjectKey(objectKey, allowedKeyPrefixes) {
+  const key = normalizeObjectKey(objectKey);
+  if (!key) return false;
+  if (key.includes("..")) return false;
+  if (key.startsWith("/")) return false;
+  return allowedKeyPrefixes.some((prefix) => key.startsWith(prefix));
+}
+
+// Validate Supabase token by calling /auth/v1/user
+async function getSupabaseUserId(request, env) {
   const auth = request.headers.get("Authorization") || "";
   if (!auth.startsWith("Bearer ")) return null;
-  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return null;
 
   const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
     method: "GET",
@@ -95,7 +102,9 @@ async function getSupabaseUser(request, env) {
   });
 
   if (!res.ok) return null;
-  return res.json();
+
+  const data = await res.json();
+  return data?.id || null;
 }
 
 export default {
@@ -110,8 +119,8 @@ export default {
       return new Response("Method Not Allowed", { status: 405, headers: cors(origin) });
     }
 
-    const user = await getSupabaseUser(request, env);
-    if (!user?.id) {
+    const userId = await getSupabaseUserId(request, env);
+    if (!userId) {
       return new Response("Unauthorized", { status: 401, headers: cors(origin) });
     }
 
@@ -125,17 +134,20 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    const allowedTypes = ["loading", "pod", "eway", "upi_qr", "payment-proof"];
+    const allowedTripDocTypes = ["loading", "pod", "eway"];
     const allowedExt = ["jpg", "jpeg", "png", "webp", "pdf"];
+    const allowedKeyPrefixes = ["trips/", "verification/"];
 
     const accountId = env.R2_ACCOUNT_ID;
     const bucket = env.R2_BUCKET_NAME;
+
     if (!accountId || !bucket) {
       return json({ error: "Missing R2_ACCOUNT_ID or R2_BUCKET_NAME in Worker vars" }, 500, origin);
     }
 
     const accessKeyId = env.R2_ACCESS_KEY_ID;
     const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
+
     if (!accessKeyId || !secretAccessKey) {
       return json({ error: "Missing R2_ACCESS_KEY_ID or R2_SECRET_ACCESS_KEY in Worker secrets" }, 500, origin);
     }
@@ -155,21 +167,30 @@ export default {
     const payloadHash = "UNSIGNED-PAYLOAD";
 
     if (pathname.endsWith("/presign/put")) {
-      const { tripId, docType, fileExt, objectKey } = body || {};
-      const tripIdText = typeof tripId === "string" ? tripId.trim() : "";
-      const docTypeText = typeof docType === "string" ? docType.trim() : "";
-      const ext = (typeof fileExt === "string" ? fileExt : "bin").toLowerCase();
-      const objectKeyText = typeof objectKey === "string" ? objectKey.trim() : "";
+      let objectKey;
 
-      if (!tripIdText || !allowedTypes.includes(docTypeText)) {
-        return json({ error: "Invalid tripId or docType" }, 400, origin);
-      }
-      if (!allowedExt.includes(ext)) {
-        return json({ error: "Unsupported fileExt" }, 400, origin);
+      if (body.objectKey !== undefined) {
+        if (!isValidObjectKey(body.objectKey, allowedKeyPrefixes)) {
+          return json({ error: "Invalid objectKey" }, 400, origin);
+        }
+
+        objectKey = normalizeObjectKey(body.objectKey);
+      } else {
+        const { tripId, docType, fileExt } = body;
+
+        if (!tripId || !allowedTripDocTypes.includes(docType)) {
+          return json({ error: "Invalid tripId or docType" }, 400, origin);
+        }
+
+        const ext = (fileExt || "bin").toLowerCase();
+        if (!allowedExt.includes(ext)) {
+          return json({ error: "Unsupported fileExt" }, 400, origin);
+        }
+
+        objectKey = buildTripKey({ tripId, docType, ext });
       }
 
-      const finalObjectKey = objectKeyText || buildKey({ tripId: tripIdText, docType: docTypeText, ext });
-      const encodedKey = finalObjectKey.split("/").map(encodeRfc3986).join("/");
+      const encodedKey = objectKey.split("/").map(encodeRfc3986).join("/");
       const canonicalUri = `/${bucket}/${encodedKey}`;
       const credential = `${accessKeyId}/${credentialScope}`;
 
@@ -187,33 +208,39 @@ export default {
 
       const canonicalRequest =
         `PUT\n${canonicalUri}\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
       const canonicalRequestHash = await sha256Hex(canonicalRequest);
-      const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
+
+      const stringToSign =
+        `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
 
       const signingKey = await getSigningKey(secretAccessKey, dateStamp, region, service);
-      const signature = bytesToHex(await hmac(signingKey, stringToSign));
+      const signatureBytes = await hmac(signingKey, stringToSign);
+      const signature = bytesToHex(signatureBytes);
+
       const presignedUrl = `${endpoint}${canonicalUri}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
 
       return json(
         {
           upload_url: presignedUrl,
-          object_key: finalObjectKey,
+          object_key: objectKey,
           expires_in: expires,
-          user_id: user.id,
+          user_id: userId,
         },
         200,
-        origin,
+        origin
       );
     }
 
     if (pathname.endsWith("/presign/get")) {
-      const { objectKey } = body || {};
-      const objectKeyText = typeof objectKey === "string" ? objectKey.trim() : "";
-      if (!objectKeyText) {
-        return json({ error: "objectKey required" }, 400, origin);
+      const { objectKey } = body;
+
+      if (!isValidObjectKey(objectKey, allowedKeyPrefixes)) {
+        return json({ error: "Invalid objectKey" }, 400, origin);
       }
 
-      const encodedKey = objectKeyText.split("/").map(encodeRfc3986).join("/");
+      const normalizedKey = normalizeObjectKey(objectKey);
+      const encodedKey = normalizedKey.split("/").map(encodeRfc3986).join("/");
       const canonicalUri = `/${bucket}/${encodedKey}`;
       const credential = `${accessKeyId}/${credentialScope}`;
 
@@ -231,24 +258,30 @@ export default {
 
       const canonicalRequest =
         `GET\n${canonicalUri}\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
       const canonicalRequestHash = await sha256Hex(canonicalRequest);
-      const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
+
+      const stringToSign =
+        `AWS4-HMAC-SHA256\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
 
       const signingKey = await getSigningKey(secretAccessKey, dateStamp, region, service);
-      const signature = bytesToHex(await hmac(signingKey, stringToSign));
+      const signatureBytes = await hmac(signingKey, stringToSign);
+      const signature = bytesToHex(signatureBytes);
+
       const presignedUrl = `${endpoint}${canonicalUri}?${canonicalQueryString}&X-Amz-Signature=${signature}`;
 
       return json(
         {
-          view_url: presignedUrl,
+          download_url: presignedUrl,
+          object_key: normalizedKey,
           expires_in: expires,
-          user_id: user.id,
+          user_id: userId,
         },
         200,
-        origin,
+        origin
       );
     }
 
-    return json({ error: "Use POST /presign/put or POST /presign/get" }, 404, origin);
+    return json({ error: "Unknown endpoint" }, 404, origin);
   },
 };

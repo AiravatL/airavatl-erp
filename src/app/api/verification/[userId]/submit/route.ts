@@ -32,7 +32,12 @@ function toStr(value: unknown): string | null {
 }
 
 interface PayoutOnboardingResult {
-  status: "active" | "pending_razorpayx";
+  /**
+   * `not_provided` — the partner was verified without bank/UPI details, so
+   * there is no payout row to onboard. Ops can add them later from the
+   * payout editor on the partner detail page.
+   */
+  status: "active" | "pending_razorpayx" | "not_provided";
   razorpayxContactId?: string;
   razorpayxFundAccountId?: string;
   alreadyOnboarded?: boolean;
@@ -172,11 +177,11 @@ export async function POST(
     const bankIfscCode = toStr(body.bankIfscCode);
     const bankAccountHolderName = toStr(body.bankAccountHolderName);
 
-    if (!licenseNumber || !aadharNumber ||
-        !registrationNumber || !vehicleMasterTypeId ||
-        !bankAccountNumber || !bankIfscCode || !bankAccountHolderName) {
+    // Aadhaar and bank details are optional (RPC validates format when given
+    // and requires the bank trio all-or-nothing).
+    if (!licenseNumber || !registrationNumber || !vehicleMasterTypeId) {
       return NextResponse.json(
-        { ok: false, message: "All mandatory driver verification fields are required" },
+        { ok: false, message: "Licence, registration number and vehicle type are required" },
         { status: 400 },
       );
     }
@@ -212,13 +217,21 @@ export async function POST(
       return mapRpcError(rpcError.message ?? "Unable to submit driver verification", rpcError.code);
     }
 
-    const result = (rpcData ?? null) as { user_id?: string; verified_at?: string } | null;
+    const result = (rpcData ?? null) as
+      | { user_id?: string; verified_at?: string; payout_status?: string }
+      | null;
     const partnerUserId = result?.user_id ?? userId;
-    const payoutOnboarding = await onboardRazorpayX({
-      partnerUserId,
-      actorUserId: actorResult.actor.id,
-      driverType: "individual_driver",
-    });
+    // No bank/UPI captured -> no payout row exists, so there is nothing for
+    // RazorpayX to onboard. Calling it anyway would fail and leave a
+    // misleading error on an otherwise successful verification.
+    const payoutOnboarding: PayoutOnboardingResult =
+      result?.payout_status === "not_provided"
+        ? { status: "not_provided" }
+        : await onboardRazorpayX({
+            partnerUserId,
+            actorUserId: actorResult.actor.id,
+            driverType: "individual_driver",
+          });
 
     return NextResponse.json({
       ok: true,
@@ -239,10 +252,10 @@ export async function POST(
   const bankIfscCode = toStr(body.bankIfscCode);
   const bankAccountHolderName = toStr(body.bankAccountHolderName);
 
-  if (!transportLicenseNumber || !aadharNumber ||
-      !bankAccountNumber || !bankIfscCode || !bankAccountHolderName) {
+  // Aadhaar and bank details are optional — see the driver branch above.
+  if (!transportLicenseNumber) {
     return NextResponse.json(
-      { ok: false, message: "All mandatory transporter verification fields are required" },
+      { ok: false, message: "Transport licence number is required" },
       { status: 400 },
     );
   }
@@ -277,13 +290,18 @@ export async function POST(
     return mapRpcError(rpcError.message ?? "Unable to submit transporter verification", rpcError.code);
   }
 
-  const result = (rpcData ?? null) as { user_id?: string; verified_at?: string } | null;
+  const result = (rpcData ?? null) as
+    | { user_id?: string; verified_at?: string; payout_status?: string }
+    | null;
   const partnerUserId = result?.user_id ?? userId;
-  const payoutOnboarding = await onboardRazorpayX({
-    partnerUserId,
-    actorUserId: actorResult.actor.id,
-    driverType: "transporter",
-  });
+  const payoutOnboarding: PayoutOnboardingResult =
+    result?.payout_status === "not_provided"
+      ? { status: "not_provided" }
+      : await onboardRazorpayX({
+          partnerUserId,
+          actorUserId: actorResult.actor.id,
+          driverType: "transporter",
+        });
   return NextResponse.json({
     ok: true,
     data: {

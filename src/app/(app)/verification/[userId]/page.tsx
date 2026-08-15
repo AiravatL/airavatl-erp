@@ -156,14 +156,14 @@ export default function VerificationDetailPage() {
           licenseNumber: currentDlNumber.trim(),
           licenseExpiryDate: currentDlExpiry || undefined,
           dlPhotoKey: currentDlPhotoKey ?? undefined,
-          aadharNumber: currentAadhaarNumber.trim(),
+          aadharNumber: currentAadhaarNumber.trim() || undefined,
           aadharPhotoKey: currentAadhaarPhotoKey ?? undefined,
           registrationNumber: currentRegNumber.trim(),
           vehicleMasterTypeId: currentVehicleMasterTypeId,
           rcPhotoKey: currentRcPhotoKey ?? undefined,
-          bankAccountNumber: currentBankAccount.trim(),
-          bankIfscCode: currentBankIfsc.trim().toUpperCase(),
-          bankAccountHolderName: currentBankHolder.trim(),
+          bankAccountNumber: currentBankAccount.trim() || undefined,
+          bankIfscCode: currentBankIfsc.trim().toUpperCase() || undefined,
+          bankAccountHolderName: currentBankHolder.trim() || undefined,
           upiId: currentUpiId.trim() || undefined,
           notes: currentNotes.trim() || undefined,
         });
@@ -173,11 +173,11 @@ export default function VerificationDetailPage() {
         transportLicenseNumber: currentTransportLicenseNo.trim(),
         transportLicenseExpiry: currentTransportLicenseExp || undefined,
         licensePhotoKey: currentTransportLicensePhotoKey ?? undefined,
-        aadharNumber: currentAadhaarNumber.trim(),
+        aadharNumber: currentAadhaarNumber.trim() || undefined,
         aadharPhotoKey: currentAadhaarPhotoKey ?? undefined,
-        bankAccountNumber: currentBankAccount.trim(),
-        bankIfscCode: currentBankIfsc.trim().toUpperCase(),
-        bankAccountHolderName: currentBankHolder.trim(),
+        bankAccountNumber: currentBankAccount.trim() || undefined,
+        bankIfscCode: currentBankIfsc.trim().toUpperCase() || undefined,
+        bankAccountHolderName: currentBankHolder.trim() || undefined,
         upiId: currentUpiId.trim() || undefined,
         gstNumber: currentGstNumber.trim() || undefined,
         panNumber: currentPanNumber.trim().toUpperCase() || undefined,
@@ -191,7 +191,10 @@ export default function VerificationDetailPage() {
       // happens, stay on the page so the admin can see the error and hit
       // "Retry RazorpayX onboarding" — the data is too easy to lose track of
       // if we silently bounce them back to the list.
-      if (result?.payoutOnboarding?.status === "active") {
+      // "not_provided" means the partner was intentionally verified without
+      // bank details — nothing to retry, so leave like a clean success.
+      const payoutStatus = result?.payoutOnboarding?.status;
+      if (payoutStatus === "active" || payoutStatus === "not_provided") {
         router.push("/verification");
       }
     },
@@ -277,28 +280,38 @@ export default function VerificationDetailPage() {
   const currentPanNumber = panNumber ?? detail?.transporter?.panNumber ?? "";
   const currentNotes = notes ?? detail?.driver?.verificationNotes ?? detail?.transporter?.verificationNotes ?? "";
 
-  // Validation
+  // Validation. Aadhaar and bank details are OPTIONAL — a partner can be
+  // verified without them (no Aadhaar to hand, paid via their transporter,
+  // etc.). When supplied they must still be well-formed, and the bank trio
+  // is all-or-nothing so a half-filled account can't be saved.
+  const aadhaarOk =
+    currentAadhaarNumber.trim().length === 0 || AADHAAR_RE.test(currentAadhaarNumber.trim());
+
+  const bankTouched =
+    currentBankHolder.trim().length > 0 ||
+    currentBankAccount.trim().length > 0 ||
+    currentBankIfsc.trim().length > 0;
+  const bankOk =
+    !bankTouched ||
+    (currentBankHolder.trim().length > 0 &&
+      BANK_ACCT_RE.test(currentBankAccount.trim()) &&
+      IFSC_RE.test(currentBankIfsc.trim().toUpperCase()));
+
   const driverValid = isDriver && (
     currentRegNumber.trim().length > 0 &&
     currentVehicleMasterTypeId.length > 0 &&
     !!currentRcPhotoKey &&
     currentDlNumber.trim().length > 0 &&
     !!currentDlPhotoKey &&
-    AADHAAR_RE.test(currentAadhaarNumber.trim()) &&
-    !!currentAadhaarPhotoKey &&
-    currentBankHolder.trim().length > 0 &&
-    BANK_ACCT_RE.test(currentBankAccount.trim()) &&
-    IFSC_RE.test(currentBankIfsc.trim().toUpperCase())
+    aadhaarOk &&
+    bankOk
   );
 
   const transporterValid = isTransporter && (
     currentTransportLicenseNo.trim().length > 0 &&
     !!currentTransportLicensePhotoKey &&
-    AADHAAR_RE.test(currentAadhaarNumber.trim()) &&
-    !!currentAadhaarPhotoKey &&
-    currentBankHolder.trim().length > 0 &&
-    BANK_ACCT_RE.test(currentBankAccount.trim()) &&
-    IFSC_RE.test(currentBankIfsc.trim().toUpperCase())
+    aadhaarOk &&
+    bankOk
   );
 
   const canSubmit = !isVerified && (driverValid || transporterValid);
@@ -413,7 +426,8 @@ export default function VerificationDetailPage() {
       {/* Verified but RazorpayX onboarding didn't complete — keep the admin
           on this page so they can hit Retry without losing context. */}
       {submitMutation.isSuccess &&
-        submitMutation.data?.payoutOnboarding?.status !== "active" && (
+        submitMutation.data?.payoutOnboarding?.status !== "active" &&
+        submitMutation.data?.payoutOnboarding?.status !== "not_provided" && (
           <div className="rounded-md bg-amber-50 p-3">
             <p className="text-sm font-medium text-amber-800">
               Verified, but RazorpayX onboarding did not complete.
@@ -637,13 +651,12 @@ export default function VerificationDetailPage() {
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">
                   {isTransporter ? "Owner's Aadhaar" : "Aadhaar"}
+                  <span className="ml-2 text-[11px] font-normal text-gray-400">Optional</span>
                 </h3>
                 <div className="border-b border-gray-200 mt-1" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">
-                  Aadhaar Number <span className="text-red-500">*</span>
-                </Label>
+                <Label className="text-sm font-medium">Aadhaar Number</Label>
                 <Input
                   placeholder="123456789012"
                   value={currentAadhaarNumber}
@@ -661,7 +674,6 @@ export default function VerificationDetailPage() {
                 label="Aadhaar Photo"
                 docType="aadhaar"
                 userId={userId}
-                required
                 objectKey={currentAadhaarPhotoKey}
                 uploadSummary={detail.uploads.aadhaar}
                 disabled={!!isVerified}
@@ -672,13 +684,20 @@ export default function VerificationDetailPage() {
             {/* COMMON: Bank Details */}
             <section className="space-y-4">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">Bank Details</h3>
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Bank Details
+                  <span className="ml-2 text-[11px] font-normal text-gray-400">Optional</span>
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Leave blank to verify without payout details — they can be added later from the
+                  partner&apos;s page. If you fill any field, all three are required.
+                </p>
                 <div className="border-b border-gray-200 mt-1" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">
-                    Account Holder Name <span className="text-red-500">*</span>
+                    Account Holder Name{bankTouched && <span className="text-red-500"> *</span>}
                   </Label>
                   <Input
                     placeholder="Rajesh Kumar"
@@ -691,7 +710,7 @@ export default function VerificationDetailPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">
-                    Account Number <span className="text-red-500">*</span>
+                    Account Number{bankTouched && <span className="text-red-500"> *</span>}
                   </Label>
                   <Input
                     placeholder="12345678901234"
@@ -708,7 +727,7 @@ export default function VerificationDetailPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">
-                    IFSC Code <span className="text-red-500">*</span>
+                    IFSC Code{bankTouched && <span className="text-red-500"> *</span>}
                   </Label>
                   <Input
                     placeholder="SBIN0001234"
