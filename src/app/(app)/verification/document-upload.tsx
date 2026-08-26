@@ -9,7 +9,9 @@ import {
 } from "@/lib/api/verification";
 import type { VerificationUploadSummary } from "@/lib/types";
 import { prepareAndUploadSingleFile } from "@/lib/uploads/workflow";
-import { Upload, CheckCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { SignedImagePreview } from "@/components/shared/signed-image-preview";
+import { useDocumentPreview } from "@/app/(app)/verification/document-preview-panel";
+import { Upload, CheckCircle, AlertCircle, Loader2, RefreshCw, Eye } from "lucide-react";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
@@ -42,6 +44,10 @@ export function DocumentUpload({
   onUploaded,
 }: DocumentUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // When a side panel is mounted (the partner verification screen) the document
+  // opens beside the form so ops can read and type at once. Elsewhere we fall
+  // back to the modal preview.
+  const preview = useDocumentPreview();
   const [progress, setProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -136,6 +142,43 @@ export function DocumentUpload({
             {!selectedFile && uploadSummary?.fileName ? ` (${uploadSummary.fileName})` : ""}
             {selectedFile ? ` (${formatFileSize(selectedFile.size)})` : ""}
           </span>
+
+          {/* Ops must know whether they are looking at their own upload or one
+              the partner sent that nobody has inspected yet. */}
+          {uploadSummary?.uploadedByRole === "partner" && (
+            <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+              From partner
+            </span>
+          )}
+
+          {/* The slot key has no file extension, so nothing can sniff PDFs from
+              it — the recorded mimeType is the only reliable signal. */}
+          {preview.available ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px] shrink-0"
+              onClick={() =>
+                preview.open({
+                  objectKey,
+                  label,
+                  mimeType: uploadSummary?.mimeType ?? null,
+                })
+              }
+            >
+              <Eye className="h-3 w-3" />
+              <span className="ml-1">View</span>
+            </Button>
+          ) : (
+            <SignedImagePreview
+              objectKey={objectKey}
+              label={label}
+              source="verification"
+              mimeType={uploadSummary?.mimeType ?? null}
+            />
+          )}
+
           {!disabled && (
             <Button
               type="button"

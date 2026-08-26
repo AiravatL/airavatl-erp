@@ -14,6 +14,7 @@ export interface BreakdownItem {
 
 export interface OperationsHealth {
   stuckDriverPayouts: number;
+  failedDriverPayouts: number;
   partnersPendingOnboarding: number;
   tripsOverdueForPayment: number;
   pushQueueBacklog: number;
@@ -326,6 +327,7 @@ export async function getOperationsHealth(): Promise<OperationsHealth> {
   );
   return {
     stuckDriverPayouts: toNum(raw.stuck_driver_payouts),
+    failedDriverPayouts: toNum(raw.failed_driver_payouts),
     partnersPendingOnboarding: toNum(raw.partners_pending_onboarding),
     tripsOverdueForPayment: toNum(raw.trips_overdue_for_payment),
     pushQueueBacklog: toNum(raw.push_queue_backlog),

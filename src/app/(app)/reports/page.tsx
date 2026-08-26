@@ -184,6 +184,18 @@ interface HealthCardConfig {
 
 const HEALTH_CARDS: { key: keyof Omit<OperationsHealth, "asOf">; config: HealthCardConfig }[] = [
   {
+    key: "failedDriverPayouts",
+    config: {
+      label: "Failed driver payouts",
+      // The consigner has already been charged and the trip is already running
+      // by the time the payout is attempted, so a failure here is money owed to
+      // a partner who is mid-delivery. Critical, not a warning.
+      description: "Consigner paid but the driver was not. Needs manual payout.",
+      href: "/payments",
+      severity: (n) => (n === 0 ? "ok" : "critical"),
+    },
+  },
+  {
     key: "stuckDriverPayouts",
     config: {
       label: "Stuck driver payouts",

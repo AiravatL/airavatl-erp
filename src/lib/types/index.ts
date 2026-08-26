@@ -405,7 +405,14 @@ export interface LeadActivity {
 
 // Partner Verification types
 export type PartnerUserType = "individual_driver" | "transporter";
-export type VerificationUploadDocType = "rc" | "dl" | "aadhaar" | "transport_license";
+export type VerificationUploadDocType =
+  | "rc"
+  | "dl"
+  | "aadhaar"
+  | "transport_license"
+  // Payout artifact rather than KYC: the partner sends a photo of their UPI QR
+  // and the server reads the VPA out of it. Optional, never gates verification.
+  | "upi_qr";
 export type VerificationUploadStatus =
   | "prepared"
   | "uploaded"
@@ -424,6 +431,23 @@ export interface VerificationUploadSummary {
   uploadedAt: string | null;
   attachedAt: string | null;
   source: VerificationUploadSource;
+  /** Who put the current file in the slot. Null for legacy fallback rows. */
+  uploadedByRole: "erp" | "partner" | null;
+}
+
+/**
+ * Payout details the PARTNER proposed from the app. Unverified input — ops
+ * prefill from it and confirm. Distinct from driver.upiId / driver.bankAccount*,
+ * which are the verified values from driver_payout_settings.
+ */
+export interface VerificationPayoutProposal {
+  method: "upi" | "bank";
+  upiVpa: string | null;
+  upiSource: "typed" | "qr" | null;
+  bankAccountNumber: string | null;
+  bankIfscCode: string | null;
+  bankAccountHolderName: string | null;
+  submittedAt: string | null;
 }
 
 export type PendingVerificationKind =
@@ -508,6 +532,7 @@ export interface VerificationDetails {
     isVerified: boolean;
   } | null;
   uploads: Partial<Record<VerificationUploadDocType, VerificationUploadSummary | null>>;
+  payoutProposal: VerificationPayoutProposal | null;
 }
 
 // Aadhaar and bank details are optional: partners can be verified without

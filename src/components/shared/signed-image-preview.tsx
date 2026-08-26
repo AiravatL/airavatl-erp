@@ -34,6 +34,16 @@ async function getTripProofViewUrl(objectKey: string): Promise<{ viewUrl: string
   });
 }
 
+// Separate endpoint because verification is gated on a different role set
+// (super_admin / admin / sales_vehicles) than payments or trips.
+async function getVerificationViewUrl(objectKey: string): Promise<{ viewUrl: string; expiresIn: number | null }> {
+  return apiRequest<{ viewUrl: string; expiresIn: number | null }>("/api/verification/object-view-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ objectKey }),
+  });
+}
+
 export function SignedImagePreview({
   objectKey,
   label,
@@ -42,13 +52,18 @@ export function SignedImagePreview({
 }: {
   objectKey: string;
   label: string;
-  /** "payment" uses the payment-specific endpoint, "trip" uses the general trip proof endpoint */
-  source?: "payment" | "trip";
+  /** Picks the endpoint — each is gated on a different role set. */
+  source?: "payment" | "trip" | "verification";
   mimeType?: string | null;
 }) {
   const [show, setShow] = useState(false);
 
-  const fetchFn = source === "trip" ? getTripProofViewUrl : getPaymentObjectViewUrl;
+  const fetchFn =
+    source === "trip"
+      ? getTripProofViewUrl
+      : source === "verification"
+        ? getVerificationViewUrl
+        : getPaymentObjectViewUrl;
 
   const previewQuery = useQuery({
     queryKey: ["object-view", source, objectKey],

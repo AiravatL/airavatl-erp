@@ -61,7 +61,7 @@ interface VehicleRow {
 }
 
 interface UploadRow {
-  doc_type: "rc" | "dl" | "aadhaar" | "transport_license";
+  doc_type: "rc" | "dl" | "aadhaar" | "transport_license" | "upi_qr";
   status: "prepared" | "uploaded" | "attached" | "expired" | "missing";
   object_key: string | null;
   file_name: string | null;
@@ -70,6 +70,17 @@ interface UploadRow {
   uploaded_at: string | null;
   attached_at: string | null;
   source: "draft" | "final" | "none";
+  uploaded_by_role: "erp" | "partner" | null;
+}
+
+interface PayoutProposalRow {
+  method: "upi" | "bank";
+  upi_vpa: string | null;
+  upi_source: "typed" | "qr" | null;
+  bank_account_number: string | null;
+  bank_ifsc_code: string | null;
+  bank_account_holder_name: string | null;
+  submitted_at: string | null;
 }
 
 interface RpcResult {
@@ -78,6 +89,7 @@ interface RpcResult {
   transporter: TransporterRow | null;
   vehicle: VehicleRow | null;
   uploads?: Partial<Record<UploadRow["doc_type"], UploadRow | null>> | null;
+  payout_proposal?: PayoutProposalRow | null;
 }
 
 function normalizeDriver(d: DriverRow | null) {
@@ -147,6 +159,20 @@ function normalizeUpload(upload: UploadRow | null | undefined) {
     uploadedAt: upload.uploaded_at,
     attachedAt: upload.attached_at,
     source: upload.source,
+    uploadedByRole: upload.uploaded_by_role ?? null,
+  };
+}
+
+function normalizePayoutProposal(p: PayoutProposalRow | null | undefined) {
+  if (!p) return null;
+  return {
+    method: p.method,
+    upiVpa: p.upi_vpa,
+    upiSource: p.upi_source,
+    bankAccountNumber: p.bank_account_number,
+    bankIfscCode: p.bank_ifsc_code,
+    bankAccountHolderName: p.bank_account_holder_name,
+    submittedAt: p.submitted_at,
   };
 }
 
@@ -203,7 +229,9 @@ export async function GET(
         dl: normalizeUpload(result.uploads?.dl),
         aadhaar: normalizeUpload(result.uploads?.aadhaar),
         transport_license: normalizeUpload(result.uploads?.transport_license),
+        upi_qr: normalizeUpload(result.uploads?.upi_qr),
       },
+      payoutProposal: normalizePayoutProposal(result.payout_proposal),
     },
   });
 }

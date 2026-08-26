@@ -32,6 +32,7 @@ import {
   getTransporterFleet,
   getPartnerPayoutStatus,
   retryPayoutOnboarding,
+  decodePartnerUpiQr,
   updatePartnerProfile,
   deletePartner,
   type TransporterFleetVehicle,
@@ -43,6 +44,10 @@ import { queryKeys } from "@/lib/query/keys";
 import { formatDate } from "@/lib/formatters";
 import { useAuth } from "@/lib/auth/auth-context";
 import { DocumentUpload } from "@/app/(app)/verification/document-upload";
+import {
+  DocumentPreviewPanel,
+  DocumentPreviewProvider,
+} from "@/app/(app)/verification/document-preview-panel";
 import {
   ArrowLeft, Phone, MapPin, Calendar, ShieldCheck, ShieldOff,
   Loader2, AlertTriangle, CheckCircle, Truck, Users, Wallet, RefreshCw,
@@ -68,6 +73,10 @@ function formatPhone(phone: string) {
 const AADHAAR_RE = /^[0-9]{12}$/;
 const BANK_ACCT_RE = /^[0-9]{8,18}$/;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+// Mirrors erp.is_valid_upi_vpa_v1 in the database, which is the enforcement
+// point. Nothing validated this field before, which is how "dipesh@" reached
+// RazorpayX and failed at onboarding.
+const UPI_RE = /^[A-Za-z0-9._-]{2,64}@[A-Za-z]{2,32}$/;
 
 export default function VerificationDetailPage() {
   const params = useParams();
@@ -96,6 +105,8 @@ export default function VerificationDetailPage() {
   const [bankAccount, setBankAccount] = useState<string>();
   const [bankIfsc, setBankIfsc] = useState<string>();
   const [upiId, setUpiId] = useState<string>();
+  const [upiQrKey, setUpiQrKey] = useState<string | null>();
+  const [qrDecodeError, setQrDecodeError] = useState<string | null>(null);
   const [gstNumber, setGstNumber] = useState<string>();
   const [panNumber, setPanNumber] = useState<string>();
   const [notes, setNotes] = useState<string>();
@@ -135,6 +146,22 @@ export default function VerificationDetailPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.partnerPayoutStatus(userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pendingPayoutOnboarding });
       queryClient.invalidateQueries({ queryKey: queryKeys.operationsHealth });
+    },
+  });
+
+  // Reads the VPA out of the uploaded QR and drops it straight into the field,
+  // where ops confirm it. Never auto-submits: the QR's payee name is a self-set
+  // nickname, so a human still has to agree this is the right partner.
+  const decodeQrMutation = useMutation({
+    mutationFn: () => decodePartnerUpiQr(userId),
+    onSuccess: (data) => {
+      setQrDecodeError(null);
+      setUpiId(data.upiId);
+    },
+    onError: (err) => {
+      setQrDecodeError(
+        err instanceof Error ? err.message : "Could not read the QR code",
+      );
     },
   });
 
@@ -275,7 +302,16 @@ export default function VerificationDetailPage() {
     bankAccount ?? detail?.driver?.bankAccountNumber ?? detail?.transporter?.bankAccountNumber ?? "";
   const currentBankIfsc =
     bankIfsc ?? detail?.driver?.bankIfscCode ?? detail?.transporter?.bankIfscCode ?? "";
-  const currentUpiId = upiId ?? detail?.driver?.upiId ?? detail?.transporter?.upiId ?? "";
+  // Ordering matters. A value ops typed always wins. Then the partner's own
+  // proposal from the app, which is unverified input to be confirmed. Only then
+  // the verified value already on driver_payout_settings.
+  const proposedUpiId = detail?.payoutProposal?.upiVpa ?? null;
+  const currentUpiId =
+    upiId ?? proposedUpiId ?? detail?.driver?.upiId ?? detail?.transporter?.upiId ?? "";
+  // True only while showing the partner's suggestion untouched, so the "from
+  // partner" hint disappears the moment ops edit it.
+  const upiIsFromPartner = upiId === undefined && !!proposedUpiId;
+  const currentUpiQrKey = upiQrKey ?? detail?.uploads.upi_qr?.objectKey ?? null;
   const currentGstNumber = gstNumber ?? detail?.transporter?.gstNumber ?? "";
   const currentPanNumber = panNumber ?? detail?.transporter?.panNumber ?? "";
   const currentNotes = notes ?? detail?.driver?.verificationNotes ?? detail?.transporter?.verificationNotes ?? "";
@@ -286,6 +322,10 @@ export default function VerificationDetailPage() {
   // is all-or-nothing so a half-filled account can't be saved.
   const aadhaarOk =
     currentAadhaarNumber.trim().length === 0 || AADHAAR_RE.test(currentAadhaarNumber.trim());
+  // UPI is optional, but a malformed one must not reach RazorpayX — an invalid
+  // VPA is only rejected at onboarding, long after ops have moved on.
+  const upiOk =
+    currentUpiId.trim().length === 0 || UPI_RE.test(currentUpiId.trim());
 
   const bankTouched =
     currentBankHolder.trim().length > 0 ||
@@ -304,14 +344,16 @@ export default function VerificationDetailPage() {
     currentDlNumber.trim().length > 0 &&
     !!currentDlPhotoKey &&
     aadhaarOk &&
-    bankOk
+    bankOk &&
+    upiOk
   );
 
   const transporterValid = isTransporter && (
     currentTransportLicenseNo.trim().length > 0 &&
     !!currentTransportLicensePhotoKey &&
     aadhaarOk &&
-    bankOk
+    bankOk &&
+    upiOk
   );
 
   const canSubmit = !isVerified && (driverValid || transporterValid);
@@ -336,6 +378,7 @@ export default function VerificationDetailPage() {
   }
 
   return (
+    <DocumentPreviewProvider>
     <div className="p-4 sm:p-6 space-y-4">
       {/* Back nav */}
       <div className="flex items-center justify-between">
@@ -454,8 +497,9 @@ export default function VerificationDetailPage() {
         />
       )}
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Two-column layout. The form spans both rows on the right; the left
+          column stacks Partner Info above the document preview. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-[auto_1fr] gap-4 items-start">
         {/* Left: Partner Info */}
         <Card className="lg:col-span-1">
           <CardContent className="p-4 space-y-3">
@@ -505,8 +549,17 @@ export default function VerificationDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Right: Verification Form */}
-        <Card className="lg:col-span-2">
+        {/* Left, continued: the document being read, sticky beside the form so
+            ops never have to close a dialog to type what they just read. */}
+        <div className="lg:col-span-1 lg:row-start-2 lg:min-h-0">
+          <DocumentPreviewPanel />
+        </div>
+
+        {/* Right: Verification Form.
+            Scrolls inside itself on large screens so the document preview on the
+            left stays put while ops work down the fields. The page still scrolls
+            normally, and below lg the card just grows as before. */}
+        <Card className="lg:col-span-2 lg:row-start-1 lg:row-span-2 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:overscroll-contain">
           <CardContent className="p-4 sm:p-6 space-y-8">
             <h2 className="text-sm font-semibold text-gray-900">Verification Documents &amp; Details</h2>
 
@@ -756,11 +809,61 @@ export default function VerificationDetailPage() {
                   <Input
                     placeholder="name@upi"
                     value={currentUpiId}
-                    onChange={(e) => setUpiId(e.target.value.slice(0, 50))}
+                    onChange={(e) => {
+                      setQrDecodeError(null);
+                      setUpiId(e.target.value.slice(0, 50));
+                    }}
                     className="h-9 text-sm"
                     maxLength={50}
                     disabled={!!isVerified}
                   />
+                  {currentUpiId.length > 0 && !UPI_RE.test(currentUpiId.trim()) && (
+                    <p className="text-[11px] text-red-500">
+                      UPI ID must look like name@bank
+                    </p>
+                  )}
+                  {upiIsFromPartner && (
+                    <p className="text-[11px] text-blue-600">
+                      Suggested by the partner
+                      {detail?.payoutProposal?.upiSource === "qr" ? " (from their QR)" : ""} —
+                      confirm before verifying.
+                    </p>
+                  )}
+
+                  {/* Ops can upload the QR themselves too — partners often send
+                      it over WhatsApp rather than through the app. */}
+                  <div className="pt-1">
+                    <DocumentUpload
+                      label="UPI QR Code"
+                      docType="upi_qr"
+                      userId={userId}
+                      objectKey={currentUpiQrKey}
+                      uploadSummary={detail.uploads.upi_qr}
+                      disabled={!!isVerified}
+                      onUploaded={(key) => {
+                        setQrDecodeError(null);
+                        setUpiQrKey(key);
+                      }}
+                    />
+                  </div>
+
+                  {currentUpiQrKey && !isVerified && (
+                    <div className="space-y-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        disabled={decodeQrMutation.isPending}
+                        onClick={() => decodeQrMutation.mutate()}
+                      >
+                        {decodeQrMutation.isPending ? "Reading QR…" : "Read UPI ID from QR"}
+                      </Button>
+                      {qrDecodeError && (
+                        <p className="text-[11px] text-red-500">{qrDecodeError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {isTransporter && (
                   <>
@@ -1019,6 +1122,7 @@ export default function VerificationDetailPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </DocumentPreviewProvider>
   );
 }
 

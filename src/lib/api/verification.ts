@@ -280,6 +280,20 @@ export interface UpdatePartnerProfileInput {
   userType?: DriverUserType;
 }
 
+/**
+ * Read the UPI ID out of the QR the partner uploaded.
+ * Decoding runs server-side because the partner app has no native QR scanner
+ * (expo-camera is not one of its dependencies).
+ */
+export async function decodePartnerUpiQr(
+  userId: string,
+): Promise<{ upiId: string }> {
+  return apiRequest<{ upiId: string }>(
+    `/api/verification/${userId}/upi-qr/decode`,
+    { method: "POST" },
+  );
+}
+
 export async function updatePartnerProfile(
   userId: string,
   input: UpdatePartnerProfileInput,
