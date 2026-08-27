@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/api/http";
+import { formatPhone } from "@/lib/formatters";
 import { Search, Key, Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
 
 interface OtpEntry {
@@ -20,11 +21,6 @@ interface OtpEntry {
   user_type: string | null;
 }
 
-function formatPhone(phone: string) {
-  const d = phone.replace(/^\+?91/, "");
-  if (d.length === 10) return `+91 ${d.slice(0, 5)} ${d.slice(5)}`;
-  return phone;
-}
 
 function formatTimeAgo(seconds: number) {
   if (seconds < 60) return `${seconds}s ago`;

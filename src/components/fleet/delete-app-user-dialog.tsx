@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { deleteAppUser } from "@/lib/api/fleet-users";
+import { formatPhone } from "@/lib/formatters";
 
 interface DeleteAppUserDialogProps {
   open: boolean;
@@ -76,7 +77,7 @@ export function DeleteAppUserDialog({
           <p className="text-gray-700">
             Permanently delete{" "}
             <span className="font-medium text-gray-900">{userName}</span>
-            {userPhone ? <span className="text-gray-500"> ({userPhone})</span> : null}? They will be
+            {userPhone ? <span className="text-gray-500"> ({formatPhone(userPhone)})</span> : null}? They will be
             signed out and can register again in the correct app with the same phone number.
           </p>
 

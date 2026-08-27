@@ -19,6 +19,7 @@ const EMPTY_EDIT_VALUES: UserUpsertFormValues = {
   role: "operations",
   password: "",
   active: true,
+  whatsappNumber: "",
 };
 
 export default function EditUserPage() {
@@ -40,6 +41,10 @@ export default function EditUserPage() {
         role: values.role,
         active: values.active,
         password: values.password.trim().length > 0 ? values.password : undefined,
+        // Always sent from this form, including when blank — blanking the field
+        // is how the number is cleared. (Elsewhere, omitting it leaves the
+        // stored value untouched.)
+        whatsappNumber: values.whatsappNumber.trim(),
       });
     },
     onSuccess: (updated) => {
@@ -63,6 +68,7 @@ export default function EditUserPage() {
       role: user.role,
       password: "",
       active: user.active,
+      whatsappNumber: user.whatsappNumber ?? "",
     };
   }, [user]);
 

@@ -19,7 +19,7 @@ import {
 } from "@/lib/api/verification";
 import { queryKeys } from "@/lib/query/keys";
 import { useAuth } from "@/lib/auth/auth-context";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import {
   ArrowLeft,
   Users,
@@ -166,7 +166,7 @@ export default function EmployeeDriverVerificationPage() {
         </div>
         <p className="text-sm text-gray-500">
           Employee of {d.transporter.organizationName ?? d.transporter.fullName}
-          {d.phone ? ` · ${d.phone}` : ""}
+          {d.phone ? ` · ${formatPhone(d.phone)}` : ""}
         </p>
       </div>
 

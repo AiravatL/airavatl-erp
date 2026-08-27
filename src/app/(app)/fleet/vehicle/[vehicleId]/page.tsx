@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { getVehicleVerification } from "@/lib/api/verification";
 import { queryKeys } from "@/lib/query/keys";
 import { useAuth } from "@/lib/auth/auth-context";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import {
   ArrowLeft,
   Truck,
@@ -18,12 +18,6 @@ import {
   FileText,
 } from "lucide-react";
 
-function formatPhone(phone: string | null | undefined) {
-  if (!phone) return "—";
-  const digits = phone.replace(/^91/, "");
-  if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  return phone;
-}
 
 export default function VehicleDetailPage() {
   const params = useParams();
@@ -187,7 +181,7 @@ export default function VehicleDetailPage() {
               />
               <InfoRow label="Organisation" value={v.owner.organization_name ?? "—"} />
               <InfoRow label="Contact" value={v.owner.full_name ?? "—"} />
-              <InfoRow label="Phone" value={formatPhone(v.owner.phone)} />
+              <InfoRow label="Phone" value={formatPhone(v.owner.phone) || "—"} />
             </div>
           </CardContent>
         </Card>

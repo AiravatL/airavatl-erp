@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/lib/auth/auth-context";
 import { listConsignerLeads } from "@/lib/api/consigner-crm";
 import { queryKeys } from "@/lib/query/keys";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatPhone } from "@/lib/formatters";
 import { LEAD_STAGE_LABELS, LEAD_STAGES } from "@/lib/types";
 import type { LeadStage } from "@/lib/types";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
@@ -159,7 +159,7 @@ export default function AllLeadsPage() {
                         </td>
                         <td className="px-4 py-3 text-gray-600">
                           <p>{l.contactPerson}</p>
-                          <p className="text-[11px] text-gray-400">{l.phone}</p>
+                          <p className="text-[11px] text-gray-400">{formatPhone(l.phone)}</p>
                         </td>
                         <td className="px-4 py-3 text-gray-600">{l.route}</td>
                         <td className="px-4 py-3 text-gray-900 font-medium">{formatCurrency(l.estimatedValue)}</td>

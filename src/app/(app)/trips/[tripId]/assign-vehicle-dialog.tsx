@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { formatPhone } from "@/lib/formatters";
 import {
   Dialog,
   DialogContent,
@@ -263,7 +264,7 @@ export function AssignVehicleDialog({ tripId, vehicleType, onClose, onSuccess }:
                     {v.ownershipType === "leased" && v.leasedDriverName && (
                       <p className="text-[11px] text-gray-400 truncate">
                         Driver: {v.leasedDriverName}
-                        {v.leasedDriverPhone ? ` · ${v.leasedDriverPhone}` : ""}
+                        {v.leasedDriverPhone ? ` · ${formatPhone(v.leasedDriverPhone)}` : ""}
                       </p>
                     )}
                   </div>
@@ -282,7 +283,7 @@ export function AssignVehicleDialog({ tripId, vehicleType, onClose, onSuccess }:
                 <SelectContent>
                   {vendorDrivers.map((driver) => (
                     <SelectItem key={driver.id} value={driver.id}>
-                      {driver.fullName} · {driver.phone}
+                      {driver.fullName} · {formatPhone(driver.phone)}
                     </SelectItem>
                   ))}
                 </SelectContent>

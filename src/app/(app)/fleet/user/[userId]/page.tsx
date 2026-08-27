@@ -34,7 +34,7 @@ import { DeleteAppUserDialog } from "@/components/fleet/delete-app-user-dialog";
 import type { VerificationDetails } from "@/lib/types";
 import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
 import { queryKeys } from "@/lib/query/keys";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import { useAuth } from "@/lib/auth/auth-context";
 import {
   ArrowLeft,
@@ -63,11 +63,6 @@ const TYPE_LABEL: Record<string, string> = {
   transporter: "Transporter",
 };
 
-function formatPhone(phone: string) {
-  const digits = phone.replace(/^91/, "");
-  if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  return phone;
-}
 
 export default function PartnerDetailPage() {
   const params = useParams();

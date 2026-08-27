@@ -17,7 +17,8 @@ import {
   updateAdminUserStatus,
 } from "@/lib/api/admin-users";
 import { queryKeys } from "@/lib/query/keys";
-import { Mail, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { formatPhone } from "@/lib/formatters";
+import { Mail, MessageCircle, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -277,6 +278,18 @@ export default function UsersAdminPage() {
                             <Mail className="h-3.5 w-3.5 text-gray-400" />
                             <span className="truncate">{user.email}</span>
                           </div>
+
+                          {/* Only rendered when set — a missing number is the
+                              normal state (no WhatsApp notifications), not
+                              something to nag about on every card. */}
+                          {user.whatsappNumber && (
+                            <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-600">
+                              <MessageCircle className="h-3.5 w-3.5 text-emerald-500" />
+                              <span className="truncate" title="WhatsApp number">
+                                {formatPhone(user.whatsappNumber)}
+                              </span>
+                            </div>
+                          )}
 
                           <div className="mt-3 flex items-center justify-between rounded border border-gray-100 px-2.5 py-2">
                             <Badge

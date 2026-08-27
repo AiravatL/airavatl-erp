@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   formatCurrency,
   formatDate,
+  formatPhone,
 } from "@/lib/formatters";
 import {
   VEHICLE_TYPE_LABELS,
@@ -79,7 +80,7 @@ export function DetailsTab({
                   <p className="text-xs text-gray-500 mt-0.5">
                     {trip.pickup_contact_name as string}
                     {trip.pickup_contact_phone
-                      ? ` · ${trip.pickup_contact_phone}`
+                      ? ` · ${formatPhone(trip.pickup_contact_phone as string)}`
                       : ""}
                   </p>
                 )}
@@ -103,7 +104,7 @@ export function DetailsTab({
                   <p className="text-xs text-gray-500 mt-0.5">
                     {trip.delivery_contact_name as string}
                     {trip.delivery_contact_phone
-                      ? ` · ${trip.delivery_contact_phone}`
+                      ? ` · ${formatPhone(trip.delivery_contact_phone as string)}`
                       : ""}
                   </p>
                 )}

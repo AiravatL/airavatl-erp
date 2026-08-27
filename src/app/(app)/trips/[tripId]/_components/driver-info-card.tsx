@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatPhone } from "@/lib/formatters";
 import type { AppTripStatus } from "@/lib/types";
 import { User, Phone } from "lucide-react";
 
@@ -61,7 +61,7 @@ export function DriverInfoCard({ bid, tripStatus, isOps }: DriverInfoCardProps) 
                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
               >
                 <Phone className="h-3 w-3" />
-                {phone}
+                {formatPhone(phone)}
               </a>
             </div>
           )}

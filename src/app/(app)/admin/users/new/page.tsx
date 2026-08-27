@@ -12,6 +12,7 @@ const DEFAULT_CREATE_VALUES: UserUpsertFormValues = {
   role: "operations",
   password: "",
   active: true,
+  whatsappNumber: "",
 };
 
 export default function AddUserPage() {
@@ -31,6 +32,7 @@ export default function AddUserPage() {
       role: values.role,
       password: values.password,
       active: values.active,
+      whatsappNumber: values.whatsappNumber.trim(),
     };
     const result = await createUserMutation.mutateAsync(payload);
     return `User ${result.fullName} created successfully.`;

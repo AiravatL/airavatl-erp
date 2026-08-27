@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/lib/auth/auth-context";
+import { formatPhone } from "@/lib/formatters";
 import {
   assignFleetVehicleDriver,
   createFleetVendorDriver,
@@ -338,7 +339,7 @@ export default function VendorDetailPage() {
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">{driver.phone}{driver.alternatePhone ? ` · ${driver.alternatePhone}` : ""}</p>
+                  <p className="text-xs text-gray-500 mt-1">{formatPhone(driver.phone)}{driver.alternatePhone ? ` · ${formatPhone(driver.alternatePhone)}` : ""}</p>
 
                   {canWrite && (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -594,7 +595,7 @@ export default function VendorDetailPage() {
                           <SelectContent>
                             {drivers.map((driver) => (
                               <SelectItem key={driver.id} value={driver.id}>
-                                {driver.fullName} · {driver.phone}
+                                {driver.fullName} · {formatPhone(driver.phone)}
                               </SelectItem>
                             ))}
                           </SelectContent>

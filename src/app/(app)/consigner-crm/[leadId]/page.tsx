@@ -28,7 +28,7 @@ import {
   updateConsignerLead,
 } from "@/lib/api/consigner-crm";
 import { queryKeys } from "@/lib/query/keys";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatPhone } from "@/lib/formatters";
 import { LEAD_STAGE_LABELS, LEAD_SOURCE_LABELS } from "@/lib/types";
 import type { LeadStage, LeadActivityType, LeadActivity } from "@/lib/types";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
@@ -424,7 +424,7 @@ export default function LeadDetailPage() {
             <div className="space-y-2.5 text-sm">
               <div className="flex items-center gap-2 text-gray-600">
                 <Phone className="h-3.5 w-3.5 text-gray-400" />
-                {lead.phone}
+                {formatPhone(lead.phone)}
               </div>
               {lead.companyAddress && (
                 <div className="flex items-center gap-2 text-gray-600">

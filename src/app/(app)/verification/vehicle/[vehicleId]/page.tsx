@@ -19,7 +19,7 @@ import {
 import { prepareAndUploadSingleFile } from "@/lib/uploads/workflow";
 import { queryKeys } from "@/lib/query/keys";
 import { useAuth } from "@/lib/auth/auth-context";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import {
   ArrowLeft,
   Truck,
@@ -163,7 +163,7 @@ export default function VehicleVerificationPage() {
               <h3 className="text-sm font-semibold text-gray-900 pt-2 border-t border-gray-100">Owner</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <Row label="Name" value={v.owner.full_name} />
-                <Row label="Phone" value={v.owner.phone} />
+                <Row label="Phone" value={formatPhone(v.owner.phone)} />
                 {v.owner.organization_name && (
                   <Row label="Organization" value={v.owner.organization_name} />
                 )}

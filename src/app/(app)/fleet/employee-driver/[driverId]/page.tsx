@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { getEmployeeDriverVerification } from "@/lib/api/verification";
 import { queryKeys } from "@/lib/query/keys";
 import { useAuth } from "@/lib/auth/auth-context";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import {
   ArrowLeft,
   Phone,
@@ -19,12 +19,6 @@ import {
   FileText,
 } from "lucide-react";
 
-function formatPhone(phone: string | null | undefined) {
-  if (!phone) return "—";
-  const digits = phone.replace(/^91/, "");
-  if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  return phone;
-}
 
 export default function EmployeeDriverDetailPage() {
   const params = useParams();
@@ -120,7 +114,7 @@ export default function EmployeeDriverDetailPage() {
             <InfoRow
               icon={<Phone className="h-3.5 w-3.5 text-gray-400" />}
               label="Phone"
-              value={formatPhone(d.phone)}
+              value={formatPhone(d.phone) || "—"}
             />
             <InfoRow label="Employee ID" value={d.employeeId ?? "—"} />
             <InfoRow label="Employment status" value={d.employmentStatus ?? "—"} />

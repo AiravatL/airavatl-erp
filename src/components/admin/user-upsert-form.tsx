@@ -24,6 +24,7 @@ const EMAIL_MAX_LENGTH = 254;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 72;
 const NOTES_MAX_LENGTH = 500;
+const WHATSAPP_MAX_LENGTH = 24;
 
 export interface UserUpsertFormValues {
   fullName: string;
@@ -31,6 +32,25 @@ export interface UserUpsertFormValues {
   role: Role;
   password: string;
   active: boolean;
+  /**
+   * Optional, and blank is a real answer: it means this user gets no WhatsApp
+   * notifications. Stored normalised (country code, digits only) — the server
+   * accepts whatever shape it is typed in.
+   */
+  whatsappNumber: string;
+}
+
+/**
+ * Mirrors erp.normalize_whatsapp_number_v1 so the form can flag an obviously
+ * wrong number before a round-trip. The server still validates — this is a
+ * convenience, not the boundary.
+ */
+function looksLikeWhatsappNumber(value: string): boolean {
+  const digits = value.replace(/[^0-9]/g, "");
+  if (digits.length === 0) return false;
+  if (/^[6-9][0-9]{9}$/.test(digits)) return true;
+  if (/^0[6-9][0-9]{9}$/.test(digits)) return true;
+  return /^[1-9][0-9]{10,14}$/.test(digits);
 }
 
 interface UserUpsertFormProps {
@@ -64,12 +84,20 @@ export function UserUpsertForm({
     setForm(initialValues);
   }, [initialValues]);
 
+  // Blank is fine; only a non-empty value that cannot be a number blocks submit.
+  const whatsappInvalid =
+    form.whatsappNumber.trim().length > 0 && !looksLikeWhatsappNumber(form.whatsappNumber);
+
   const canSubmit = useMemo(() => {
     const hasBaseFields =
       form.fullName.trim().length > 1 &&
       form.fullName.trim().length <= FULL_NAME_MAX_LENGTH &&
       form.email.trim().length > 3 &&
-      form.email.trim().length <= EMAIL_MAX_LENGTH;
+      form.email.trim().length <= EMAIL_MAX_LENGTH &&
+      !(
+        form.whatsappNumber.trim().length > 0 &&
+        !looksLikeWhatsappNumber(form.whatsappNumber)
+      );
     if (mode === "create") {
       return hasBaseFields && form.password.length >= PASSWORD_MIN_LENGTH && form.password.length <= PASSWORD_MAX_LENGTH;
     }
@@ -175,6 +203,35 @@ export function UserUpsertForm({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="whatsapp_number" className="text-sm font-medium">
+                  WhatsApp Number{" "}
+                  <span className="font-normal text-gray-400">(optional)</span>
+                </Label>
+                <Input
+                  id="whatsapp_number"
+                  type="tel"
+                  inputMode="tel"
+                  value={form.whatsappNumber}
+                  onChange={(event) => updateField("whatsappNumber", event.target.value)}
+                  placeholder="e.g. 9876543210"
+                  className="h-9 text-sm"
+                  maxLength={WHATSAPP_MAX_LENGTH}
+                  autoComplete="off"
+                  aria-invalid={whatsappInvalid}
+                />
+                {whatsappInvalid ? (
+                  <p className="text-xs text-red-600">
+                    Enter a 10-digit mobile number, or include the country code.
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Used for WhatsApp notifications. Leave blank to send none.
+                    Indian numbers get +91 added automatically.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">

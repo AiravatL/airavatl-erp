@@ -7,10 +7,17 @@ export interface AdminUserRow {
   email: string;
   role: Role;
   active: boolean;
+  /** Digits with country code (e.g. 919876543210). Null = no WhatsApp notifications. */
+  whatsappNumber: string | null;
   createdAt: string | null;
 }
 
-export interface DeletedAdminUserRow extends AdminUserRow {
+/**
+ * The deleted-users audit view is served by admin_list_deleted_users_v1, which
+ * does not carry the WhatsApp number — so it is omitted here rather than typed
+ * as present-but-always-null.
+ */
+export interface DeletedAdminUserRow extends Omit<AdminUserRow, "whatsappNumber"> {
   deletedAt: string | null;
 }
 
@@ -27,6 +34,8 @@ export interface CreateAdminUserInput {
   role: Role;
   password: string;
   active: boolean;
+  /** Optional; blank means no WhatsApp notifications. */
+  whatsappNumber?: string;
 }
 
 export interface UpdateAdminUserInput {
@@ -34,6 +43,11 @@ export interface UpdateAdminUserInput {
   role?: Role;
   active?: boolean;
   password?: string;
+  /**
+   * Omit to leave the stored number untouched — that is what stops a status
+   * toggle from wiping it. Pass "" to clear it.
+   */
+  whatsappNumber?: string;
 }
 
 export interface RemoveAdminUserResult {

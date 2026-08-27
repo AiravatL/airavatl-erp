@@ -25,7 +25,7 @@ import {
   APP_TRIP_STATUS_LABELS,
 } from "@/lib/types";
 import type { AppTripStatus, VehicleTypeRequired } from "@/lib/types";
-import { formatCurrency, formatDate, formatRelativeTime } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatPhone, formatRelativeTime } from "@/lib/formatters";
 import { apiRequest } from "@/lib/api/http";
 import { reviewTripProof } from "@/lib/api/trips";
 import {
@@ -341,7 +341,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                         href={`tel:${assignedDriver.phone}`}
                         className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
                       >
-                        <Phone className="h-3 w-3" />{assignedDriver.phone}
+                        <Phone className="h-3 w-3" />{formatPhone(assignedDriver.phone)}
                       </a>
                     )}
                     {assignedDriver.license_number && (
@@ -384,7 +384,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                         href={`tel:${driverPhone}`}
                         className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 hover:underline"
                       >
-                        <Phone className="h-3 w-3" />{driverPhone}
+                        <Phone className="h-3 w-3" />{formatPhone(driverPhone)}
                       </a>
                     )}
                   </div>
@@ -586,7 +586,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                     {((trip.pickup_contact_name as string) || (trip.pickup_contact_phone as string)) && (
                       <p className="text-[11px] text-gray-500 mt-0.5">
                         {(trip.pickup_contact_name as string) || "—"}
-                        {(trip.pickup_contact_phone as string) ? ` · ${trip.pickup_contact_phone as string}` : ""}
+                        {(trip.pickup_contact_phone as string) ? ` · ${formatPhone(trip.pickup_contact_phone as string)}` : ""}
                       </p>
                     )}
                   </div>
@@ -596,7 +596,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ tripId: s
                     {((trip.delivery_contact_name as string) || (trip.delivery_contact_phone as string)) && (
                       <p className="text-[11px] text-gray-500 mt-0.5">
                         {(trip.delivery_contact_name as string) || "—"}
-                        {(trip.delivery_contact_phone as string) ? ` · ${trip.delivery_contact_phone as string}` : ""}
+                        {(trip.delivery_contact_phone as string) ? ` · ${formatPhone(trip.delivery_contact_phone as string)}` : ""}
                       </p>
                     )}
                   </div>

@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatPhone } from "@/lib/formatters";
 import { listCustomers, type CustomerItem, type CustomerFilters } from "@/lib/api/app-reports";
 import { queryKeys } from "@/lib/query/keys";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
@@ -39,7 +39,10 @@ const columns = [
     ),
   }),
   col.accessor("fullName", { header: "Contact" }),
-  col.accessor("phone", { header: "Phone" }),
+  col.accessor("phone", {
+    header: "Phone",
+    cell: (info) => formatPhone(info.getValue()),
+  }),
   col.accessor("salesOwnerName", {
     header: "Sales Owner",
     cell: (info) => info.getValue() ?? <span className="text-gray-300">—</span>,
@@ -209,7 +212,7 @@ export default function CustomersReportPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-900">{c.registeredName}</p>
-                      <p className="text-xs text-gray-500">{c.fullName} &middot; {c.phone}</p>
+                      <p className="text-xs text-gray-500">{c.fullName} &middot; {formatPhone(c.phone)}</p>
                     </div>
                     <CreditHealthBadge health={c.creditHealth} />
                   </div>

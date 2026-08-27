@@ -24,7 +24,7 @@ import { apiRequest } from "@/lib/api/http";
 import { useAuth } from "@/lib/auth/auth-context";
 import { AdminDeleteDialog } from "@/components/shared/admin-delete-dialog";
 import { queryKeys } from "@/lib/query/keys";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatPhone } from "@/lib/formatters";
 import { VEHICLE_TYPE_LABELS, DELIVERY_REQUEST_STATUS_LABELS, CARGO_TYPE_LABELS } from "@/lib/types";
 import type { DeliveryRequestStatus, VehicleTypeRequired, CargoType } from "@/lib/types";
 import {
@@ -279,7 +279,7 @@ export default function AuctionDetailPage({
                     {((req.pickup_contact_name as string) || (req.pickup_contact_phone as string)) ? (
                       <p className="text-xs text-gray-500 mt-0.5">
                         {req.pickup_contact_name as string}
-                        {req.pickup_contact_phone ? ` · ${req.pickup_contact_phone}` : ""}
+                        {req.pickup_contact_phone ? ` · ${formatPhone(req.pickup_contact_phone as string)}` : ""}
                       </p>
                     ) : null}
                   </div>
@@ -298,7 +298,7 @@ export default function AuctionDetailPage({
                     {((req.delivery_contact_name as string) || (req.delivery_contact_phone as string)) ? (
                       <p className="text-xs text-gray-500 mt-0.5">
                         {req.delivery_contact_name as string}
-                        {req.delivery_contact_phone ? ` · ${req.delivery_contact_phone}` : ""}
+                        {req.delivery_contact_phone ? ` · ${formatPhone(req.delivery_contact_phone as string)}` : ""}
                       </p>
                     ) : null}
                   </div>
@@ -835,7 +835,7 @@ function BidTableRow({ bid, rank, showActionColumn, hideBidAmount, showDistance,
       <td className="px-3 py-2 text-gray-500">{rank}</td>
       <td className="px-3 py-2">
         <p className="text-gray-900 font-medium">{bid.bidder_name}</p>
-        {bid.bidder_phone && <p className="text-[11px] text-gray-400">{bid.bidder_phone}</p>}
+        {bid.bidder_phone && <p className="text-[11px] text-gray-400">{formatPhone(bid.bidder_phone)}</p>}
       </td>
       <td className="px-3 py-2">
         <Badge variant="outline" className={`border-0 text-xs ${typeColor}`}>
@@ -898,7 +898,7 @@ function BidMobileCard({ bid, rank, hideBidAmount, showDistance, showTripAmounts
         <div>
           <span className="text-xs text-gray-400 mr-2">#{rank}</span>
           <span className="text-sm font-medium text-gray-900">{bid.bidder_name}</span>
-          {bid.bidder_phone && <span className="text-[11px] text-gray-400 ml-2">{bid.bidder_phone}</span>}
+          {bid.bidder_phone && <span className="text-[11px] text-gray-400 ml-2">{formatPhone(bid.bidder_phone)}</span>}
         </div>
         <Badge variant="outline" className={`border-0 font-medium text-xs ${statusColor}`}>
           {statusLabel}

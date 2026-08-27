@@ -24,6 +24,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { useAuth } from "@/lib/auth/auth-context";
 import { listAppUsers, type AppUser } from "@/lib/api/fleet-users";
+import { formatPhone } from "@/lib/formatters";
 import { queryKeys } from "@/lib/query/keys";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
 import { Search, Truck, Building2, UserRound } from "lucide-react";
@@ -48,7 +49,7 @@ const driverColumns = [
   }),
   driverCol.accessor("phone", {
     header: "Phone",
-    cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
+    cell: (info) => <span className="text-gray-600">{formatPhone(info.getValue())}</span>,
   }),
   driverCol.accessor("vehicleNumber", {
     header: "Vehicle",
@@ -93,7 +94,7 @@ const transporterColumns = [
   }),
   transporterCol.accessor("phone", {
     header: "Phone",
-    cell: (info) => <span className="text-gray-600">{info.getValue()}</span>,
+    cell: (info) => <span className="text-gray-600">{formatPhone(info.getValue())}</span>,
   }),
   transporterCol.accessor("vehicleCount", {
     header: "Vehicles",
@@ -247,7 +248,7 @@ export default function FleetPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <p className="text-sm font-medium text-gray-900">{d.fullName}</p>
-                            <p className="text-xs text-gray-500">{d.phone}</p>
+                            <p className="text-xs text-gray-500">{formatPhone(d.phone)}</p>
                             {d.city && <p className="text-[11px] text-gray-400">{d.city}</p>}
                           </div>
                           <DocsBadge verified={d.documentsVerified} />
@@ -295,7 +296,7 @@ export default function FleetPage() {
                           <div>
                             <p className="text-sm font-medium text-gray-900">{t.accountName ?? t.fullName}</p>
                             <p className="text-xs text-gray-500">{t.fullName}</p>
-                            <p className="text-[11px] text-gray-400">{t.phone}</p>
+                            <p className="text-[11px] text-gray-400">{formatPhone(t.phone)}</p>
                             {t.city && <p className="text-[11px] text-gray-400">{t.city}</p>}
                           </div>
                           <DocsBadge verified={t.documentsVerified} />

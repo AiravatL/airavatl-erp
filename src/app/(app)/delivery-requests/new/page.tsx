@@ -29,6 +29,7 @@ import {
   getDirections,
 } from "@/lib/api/delivery-requests";
 import { apiRequest } from "@/lib/api/http";
+import { formatPhone } from "@/lib/formatters";
 import type { PlaceDetails, RouteResult, AuctionConsigner } from "@/lib/api/delivery-requests";
 import { getTripRequest, linkTripRequestToAuction } from "@/lib/api/trip-requests";
 import { queryKeys } from "@/lib/query/keys";
@@ -474,7 +475,7 @@ export default function CreateDeliveryRequestPage() {
                               {selectedConsigner.displayName}
                             </p>
                             <p className="text-[11px] text-gray-500 truncate">
-                              {selectedConsigner.contactName} · {selectedConsigner.phone}
+                              {selectedConsigner.contactName} · {formatPhone(selectedConsigner.phone)}
                             </p>
                           </div>
                         </div>
@@ -533,7 +534,7 @@ export default function CreateDeliveryRequestPage() {
                               >
                                 <span className="text-sm text-gray-900">{c.displayName}</span>
                                 <span className="text-[11px] text-gray-500">
-                                  {c.contactName} · {c.phone}
+                                  {c.contactName} · {formatPhone(c.phone)}
                                 </span>
                               </CommandItem>
                             ))}

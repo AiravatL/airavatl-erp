@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth/auth-context";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatPhone } from "@/lib/formatters";
 import { getCustomerById, listCustomerReceivables, listCustomerTrips, updateCustomer } from "@/lib/api/customers";
 import { APP_TRIP_STATUS_LABELS } from "@/lib/types";
 import { queryKeys } from "@/lib/query/keys";
@@ -167,7 +167,7 @@ export default function CustomerDetailPage() {
             {c.contactName && (
               <InfoRow icon={<Building2 className="h-3.5 w-3.5 text-gray-400" />} label="Contact" value={`${c.contactName}${c.contactDesignation ? ` · ${c.contactDesignation}` : ""}`} />
             )}
-            {c.phone && <InfoRow icon={<Phone className="h-3.5 w-3.5 text-gray-400" />} label="Phone" value={c.phone} />}
+            {c.phone && <InfoRow icon={<Phone className="h-3.5 w-3.5 text-gray-400" />} label="Phone" value={formatPhone(c.phone)} />}
             {c.email && <InfoRow icon={<Mail className="h-3.5 w-3.5 text-gray-400" />} label="Email" value={c.email} />}
             {c.address && <InfoRow icon={<MapPin className="h-3.5 w-3.5 text-gray-400" />} label="Address" value={c.address} />}
             {c.natureOfBusiness && <InfoRow icon={<FileText className="h-3.5 w-3.5 text-gray-400" />} label="Business" value={c.natureOfBusiness} />}

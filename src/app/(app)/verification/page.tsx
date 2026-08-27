@@ -39,7 +39,7 @@ import {
   type DriverUserType,
 } from "@/lib/api/verification";
 import { queryKeys } from "@/lib/query/keys";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import type { PendingVerificationItem, PendingVerificationKind } from "@/lib/types";
 import {
   Search,
@@ -79,12 +79,6 @@ function TabCount({ n }: { n: number | undefined }) {
   );
 }
 
-function formatPhone(phone: string | null | undefined) {
-  if (!phone) return "";
-  const digits = phone.replace(/^91/, "");
-  if (digits.length === 10) return `${digits.slice(0, 5)} ${digits.slice(5)}`;
-  return digits;
-}
 
 function timeAgo(dateStr: string) {
   const now = Date.now();

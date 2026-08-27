@@ -19,6 +19,7 @@ interface ProfileRow {
   email: string;
   role: Role;
   active: boolean;
+  whatsapp_number?: string | null;
   created_at?: string | null;
 }
 
@@ -35,7 +36,11 @@ interface PatchBody {
   role?: unknown;
   active?: unknown;
   password?: unknown;
+  whatsappNumber?: unknown;
 }
+
+/** Generous cap — the DB normaliser is the real validator; this only stops abuse. */
+const WHATSAPP_MAX_LENGTH = 24;
 
 function isRole(value: string): value is Role {
   return ROLE_VALUES.includes(value as Role);
@@ -94,6 +99,7 @@ function normalizeProfile(row: ProfileRow) {
     email: row.email,
     role: row.role,
     active: row.active,
+    whatsappNumber: row.whatsapp_number ?? null,
     createdAt: row.created_at ?? null,
   };
 }
@@ -153,10 +159,27 @@ export async function PATCH(request: Request, context: RouteParams) {
   const hasRole = !!body && Object.prototype.hasOwnProperty.call(body, "role");
   const hasActive = typeof body?.active === "boolean";
   const hasPassword = !!body && Object.prototype.hasOwnProperty.call(body, "password");
+  const hasWhatsapp = !!body && Object.prototype.hasOwnProperty.call(body, "whatsappNumber");
 
-  if (!hasFullName && !hasRole && !hasActive && !hasPassword) {
+  if (!hasFullName && !hasRole && !hasActive && !hasPassword && !hasWhatsapp) {
     return NextResponse.json(
-      { ok: false, message: "At least one field is required: fullName, role, active, password" },
+      {
+        ok: false,
+        message:
+          "At least one field is required: fullName, role, active, password, whatsappNumber",
+      },
+      { status: 400 },
+    );
+  }
+
+  // Absent means "leave the stored number alone" — the RPC relies on null for
+  // that, which is what keeps a status toggle from wiping it. An explicitly
+  // empty string is how the form clears the field.
+  const whatsappNumber =
+    typeof body?.whatsappNumber === "string" ? body.whatsappNumber.trim() : "";
+  if (hasWhatsapp && whatsappNumber.length > WHATSAPP_MAX_LENGTH) {
+    return NextResponse.json(
+      { ok: false, message: `whatsappNumber must be at most ${WHATSAPP_MAX_LENGTH} characters` },
       { status: 400 },
     );
   }
@@ -260,11 +283,22 @@ export async function PATCH(request: Request, context: RouteParams) {
     p_role: nextRole,
     p_active: nextActive,
     p_actor_user_id: actorResult.actor.id,
+    p_whatsapp_number: hasWhatsapp ? whatsappNumber : null,
   } as never);
 
   if (rpcError) {
     if (isMissingRpcError(rpcError)) {
       return NextResponse.json({ ok: false, message: "Missing RPC: admin_upsert_profile_v1" }, { status: 500 });
+    }
+    if (rpcError.message?.includes("invalid_whatsapp_number")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message:
+            "Enter a valid WhatsApp number — a 10-digit mobile, or include the country code.",
+        },
+        { status: 400 },
+      );
     }
     return NextResponse.json(
       { ok: false, message: rpcError.message || "Unable to update user" },

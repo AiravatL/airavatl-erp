@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Trip } from "@/lib/types";
-import { formatDate, formatCurrency } from "@/lib/formatters";
+import { formatDate, formatCurrency, formatPhone } from "@/lib/formatters";
 import { MapPin, Calendar, Weight, User, TruckIcon, IndianRupee, Phone } from "lucide-react";
 
 export function OverviewTab({ trip }: { trip: Trip }) {
@@ -28,11 +28,11 @@ export function OverviewTab({ trip }: { trip: Trip }) {
         <CardContent className="space-y-3">
           <InfoRow icon={TruckIcon} label="Vehicle" value={trip.vehicleNumber || "Not assigned"} />
           <InfoRow icon={User} label="Driver Name" value={trip.driverName || "Not assigned"} />
-          <InfoRow icon={Phone} label="Driver Phone" value={trip.driverPhone || "—"} />
+          <InfoRow icon={Phone} label="Driver Phone" value={formatPhone(trip.driverPhone) || "—"} />
           {(trip.vendorId || trip.vendorName || trip.vendorPhone) && (
             <>
               <InfoRow icon={User} label="Vendor Name" value={trip.vendorName || "—"} />
-              <InfoRow icon={Phone} label="Vendor Phone" value={trip.vendorPhone || "—"} />
+              <InfoRow icon={Phone} label="Vendor Phone" value={formatPhone(trip.vendorPhone) || "—"} />
             </>
           )}
           <InfoRow

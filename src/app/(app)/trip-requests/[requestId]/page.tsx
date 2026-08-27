@@ -19,7 +19,7 @@ import {
 import type { TripRequestDetail, TripRequestStatus } from "@/lib/api/trip-requests";
 import { queryKeys } from "@/lib/query/keys";
 import { useAuth } from "@/lib/auth/auth-context";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import {
   ArrowLeft, Loader2, CheckCircle2, XCircle, Ban, ExternalLink, Trash2,
 } from "lucide-react";
@@ -296,7 +296,7 @@ function DetailCard({ req }: { req: TripRequestDetail }) {
         <Block title="Consigner">
           <Kv label="Name" value={req.consigner_display ?? "—"} />
           {req.consigner_business_name && <Kv label="Business" value={req.consigner_business_name} />}
-          {req.consigner_phone && <Kv label="Phone" value={req.consigner_phone} />}
+          {req.consigner_phone && <Kv label="Phone" value={formatPhone(req.consigner_phone)} />}
           {req.created_by_full_name && (
             <Kv label="Submitted by" value={`${req.created_by_full_name}${req.created_by_role ? ` · ${req.created_by_role}` : ""}`} />
           )}
@@ -307,7 +307,7 @@ function DetailCard({ req }: { req: TripRequestDetail }) {
           {(req.pickup_city || req.pickup_state) && (
             <Kv label="Location" value={[req.pickup_city, req.pickup_state].filter(Boolean).join(", ")} />
           )}
-          {req.pickup_contact_name && <Kv label="Contact" value={`${req.pickup_contact_name}${req.pickup_contact_phone ? ` · ${req.pickup_contact_phone}` : ""}`} />}
+          {req.pickup_contact_name && <Kv label="Contact" value={`${req.pickup_contact_name}${req.pickup_contact_phone ? ` · ${formatPhone(req.pickup_contact_phone)}` : ""}`} />}
         </Block>
 
         <Block title="Delivery">
@@ -315,7 +315,7 @@ function DetailCard({ req }: { req: TripRequestDetail }) {
           {(req.delivery_city || req.delivery_state) && (
             <Kv label="Location" value={[req.delivery_city, req.delivery_state].filter(Boolean).join(", ")} />
           )}
-          {req.delivery_contact_name && <Kv label="Contact" value={`${req.delivery_contact_name}${req.delivery_contact_phone ? ` · ${req.delivery_contact_phone}` : ""}`} />}
+          {req.delivery_contact_name && <Kv label="Contact" value={`${req.delivery_contact_name}${req.delivery_contact_phone ? ` · ${formatPhone(req.delivery_contact_phone)}` : ""}`} />}
         </Block>
 
         <Block title="Cargo">

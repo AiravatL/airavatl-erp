@@ -7,6 +7,7 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import type { DriverLocationItem } from "@/lib/api/app-reports";
+import { formatPhone } from "@/lib/formatters";
 
 interface DriversMapProps {
   drivers: DriverLocationItem[];
@@ -31,12 +32,6 @@ function driverMarkerIcon(isOnline: boolean, hasTrip: boolean, isStale: boolean,
   });
 }
 
-function formatPhone(phone: string) {
-  if (!phone) return "";
-  const d = phone.replace(/^91/, "");
-  if (d.length === 10) return `+91 ${d.slice(0, 5)} ${d.slice(5)}`;
-  return phone;
-}
 
 function prettify(s: string) {
   return s.split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
+import { formatPhone } from "@/lib/formatters";
 import {
   listPendingPayoutOnboarding,
   retryPayoutOnboarding,
@@ -23,11 +24,6 @@ const TYPE_LABEL: Record<string, string> = {
   transporter: "Transporter",
 };
 
-function formatPhone(phone: string) {
-  const digits = phone.replace(/^91/, "");
-  if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  return phone;
-}
 
 function describePayoutMethod(item: PendingPayoutOnboardingItem) {
   const parts: string[] = [];

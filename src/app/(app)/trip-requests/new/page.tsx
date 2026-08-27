@@ -25,6 +25,7 @@ import {
 } from "@/lib/api/trip-requests";
 import type { TripRequestConsigner } from "@/lib/api/trip-requests";
 import { CARGO_TYPE_LABELS } from "@/lib/types";
+import { formatPhone } from "@/lib/formatters";
 import type { CargoType } from "@/lib/types";
 import { LocationPicker } from "./location-picker";
 import {
@@ -155,7 +156,7 @@ export default function NewTripRequestPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{selectedConsigner.displayName}</p>
                         <p className="text-[11px] text-gray-500 truncate">
-                          {selectedConsigner.contactName} · {selectedConsigner.phone}
+                          {selectedConsigner.contactName} · {formatPhone(selectedConsigner.phone)}
                         </p>
                       </div>
                     </div>
@@ -202,7 +203,7 @@ export default function NewTripRequestPage() {
                             }}
                             className="flex-col items-start gap-0.5">
                             <span className="text-sm text-gray-900">{c.displayName}</span>
-                            <span className="text-[11px] text-gray-500">{c.contactName} · {c.phone}</span>
+                            <span className="text-[11px] text-gray-500">{c.contactName} · {formatPhone(c.phone)}</span>
                           </CommandItem>
                         ))}
                       </CommandGroup>

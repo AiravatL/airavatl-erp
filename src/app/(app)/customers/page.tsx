@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { KpiCard } from "@/components/reports/kpi-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth/auth-context";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatPhone } from "@/lib/formatters";
 import { listCustomers, listAppConsigners, type CustomerListItem, type AppConsigner } from "@/lib/api/customers";
 import { queryKeys } from "@/lib/query/keys";
 import { FIELD_LIMITS } from "@/lib/validation/client/field-limits";
@@ -161,7 +161,7 @@ export default function CustomersPage() {
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-sm font-medium text-gray-900">{c.businessName}</p>
-                          <p className="text-xs text-gray-500">{c.fullName} · {c.phone}</p>
+                          <p className="text-xs text-gray-500">{c.fullName} · {formatPhone(c.phone)}</p>
                           {c.city && <p className="text-[11px] text-gray-400">{c.city}{c.state ? `, ${c.state}` : ""}</p>}
                         </div>
                         <div className="flex items-center gap-2">
@@ -283,7 +283,7 @@ function AppTable({
               <p className="font-medium text-gray-900">{c.businessName}</p>
               {c.businessName !== c.fullName && <p className="text-[11px] text-gray-400">{c.fullName}</p>}
             </td>
-            <td className="px-4 py-3 text-gray-600">{c.phone}</td>
+            <td className="px-4 py-3 text-gray-600">{formatPhone(c.phone)}</td>
             <td className="px-4 py-3 text-gray-600">{c.city || "—"}{c.state ? `, ${c.state}` : ""}</td>
             <td className="px-4 py-3">
               <Badge variant="outline" className="text-[10px] border-0 bg-blue-50 text-blue-700">

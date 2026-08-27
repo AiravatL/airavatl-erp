@@ -41,7 +41,7 @@ import {
 } from "@/lib/api/verification";
 import { VehicleTypePicker } from "@/components/shared/vehicle-type-picker";
 import { queryKeys } from "@/lib/query/keys";
-import { formatDate } from "@/lib/formatters";
+import { formatDate, formatPhone } from "@/lib/formatters";
 import { useAuth } from "@/lib/auth/auth-context";
 import { DocumentUpload } from "@/app/(app)/verification/document-upload";
 import {
@@ -63,11 +63,6 @@ const TYPE_LABEL: Record<string, string> = {
   transporter: "Transporter",
 };
 
-function formatPhone(phone: string) {
-  const digits = phone.replace(/^91/, "");
-  if (digits.length === 10) return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
-  return phone;
-}
 
 // Validation helpers
 const AADHAAR_RE = /^[0-9]{12}$/;

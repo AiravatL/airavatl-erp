@@ -17,6 +17,7 @@ interface ProfileRow {
   email: string;
   role: Role;
   active: boolean;
+  whatsapp_number?: string | null;
   created_at?: string | null;
 }
 
@@ -34,7 +35,11 @@ interface CreateUserBody {
   password?: unknown;
   role?: unknown;
   active?: unknown;
+  whatsappNumber?: unknown;
 }
+
+/** Generous cap — the DB normaliser is the real validator; this only stops abuse. */
+const WHATSAPP_MAX_LENGTH = 24;
 
 function isRole(value: string): value is Role {
   return ROLE_VALUES.includes(value as Role);
@@ -93,6 +98,7 @@ function normalizeProfile(row: ProfileRow) {
     email: row.email,
     role: row.role,
     active: row.active,
+    whatsappNumber: row.whatsapp_number ?? null,
     createdAt: row.created_at ?? null,
   };
 }
@@ -148,6 +154,17 @@ export async function POST(request: Request) {
   const password = typeof body?.password === "string" ? body.password : "";
   const role = typeof body?.role === "string" ? body.role : "";
   const active = typeof body?.active === "boolean" ? body.active : true;
+  // Optional. Blank is normalised to null by the RPC, meaning "no WhatsApp
+  // notifications for this user".
+  const whatsappNumber =
+    typeof body?.whatsappNumber === "string" ? body.whatsappNumber.trim() : "";
+
+  if (whatsappNumber.length > WHATSAPP_MAX_LENGTH) {
+    return NextResponse.json(
+      { ok: false, message: `whatsappNumber must be at most ${WHATSAPP_MAX_LENGTH} characters` },
+      { status: 400 },
+    );
+  }
 
   if (!fullName || !email || !password || !role) {
     return NextResponse.json(
@@ -222,6 +239,7 @@ export async function POST(request: Request) {
       p_role: role,
       p_active: active,
       p_actor_user_id: actorResult.actor.id,
+      p_whatsapp_number: whatsappNumber,
     } as never,
   );
 
@@ -229,6 +247,16 @@ export async function POST(request: Request) {
     await adminClient.auth.admin.deleteUser(newUserId);
     if (isMissingRpcError(rpcProfileError)) {
       return NextResponse.json({ ok: false, message: "Missing RPC: admin_upsert_profile_v1" }, { status: 500 });
+    }
+    if (rpcProfileError.message?.includes("invalid_whatsapp_number")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message:
+            "Enter a valid WhatsApp number — a 10-digit mobile, or include the country code.",
+        },
+        { status: 400 },
+      );
     }
 
     return NextResponse.json(
