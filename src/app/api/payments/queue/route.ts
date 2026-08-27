@@ -10,6 +10,8 @@ interface QueueRow {
   trip_current_stage: string;
   type: string;
   status: string;
+  /** "app" = raised automatically when the consigner paid; "erp" = raised by operations. */
+  trip_source: string | null;
   amount: number | string;
   paid_amount: number | string | null;
   trip_amount: number | string | null;
@@ -82,6 +84,7 @@ export async function GET(request: Request) {
     tripCurrentStage: row.trip_current_stage,
     type: row.type,
     status: row.status,
+    tripSource: row.trip_source === "app" ? "app" : "erp",
     amount: toNumber(row.amount) ?? 0,
     paidAmount: toNumber(row.paid_amount),
     tripAmount: toNumber(row.trip_amount),

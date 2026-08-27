@@ -11,7 +11,8 @@ import type { Role } from "@/lib/types";
 import { StatCard } from "./_components/dashboard-panel";
 import {
   TripRequestsPanel, ActiveTripsPanel, VerificationPanel,
-  PayoutOnboardingPanel, PaymentQueuePanel, TicketsPanel,
+  PayoutOnboardingPanel, PaymentQueuePanel, PaymentRequestsToRaisePanel,
+  TicketsPanel,
 } from "./_components/role-panels";
 import {
   Truck, CreditCard, Receipt, Plus, TicketCheck, Users,
@@ -124,16 +125,30 @@ function RolePanels({ role }: { role: Role }) {
         </div>
       );
     case "sales_consigner":
+      // Trip requests are still this role's own workflow (they create them
+      // from /trip-requests/new), so the panel stays here even though it is
+      // quiet — enterprise clients go straight to auction and never file one.
       return (
         <div className="grid grid-cols-1 gap-4">
           <TripRequestsPanel />
         </div>
       );
-    default:
-      // super_admin, admin, operations
+    case "operations":
+      // Operations cannot call the payments API (PAYMENTS_ALLOWED_ROLES omits
+      // them) and must not see amounts, so their half of "pending payments" is
+      // the requests they still have to raise — which is what actually blocks
+      // the driver and keeps the payout out of the accounts queue.
       return (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <TripRequestsPanel />
+          <PaymentRequestsToRaisePanel />
+          <ActiveTripsPanel />
+        </div>
+      );
+    default:
+      // super_admin, admin
+      return (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <PaymentQueuePanel />
           <ActiveTripsPanel />
         </div>
       );
@@ -154,9 +169,11 @@ function getQuickActions(role: Role) {
         { label: "Rate Library", href: "/rates", icon: Receipt },
       ];
     case "operations":
+      // No Trip Requests shortcut: enterprise clients go straight to auction
+      // and the table has had nothing pending for months. sales_consigner
+      // keeps theirs — filing requests is still their own workflow.
       return [
         { label: "New Auction", href: "/delivery-requests/new", icon: Plus },
-        { label: "Trip Requests", href: "/trip-requests", icon: ClipboardList },
         { label: "Trips", href: "/trips", icon: Truck },
         { label: "Live Map", href: "/fleet/live-map", icon: MapPin },
       ];

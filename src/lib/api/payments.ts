@@ -18,7 +18,14 @@ export interface PaymentQueueItem {
   paidAmount: number | null;
   tripAmount: number | null;
   beneficiary: string;
-  paymentMethod: "bank" | "upi" | "bank_transfer" | null;
+  /**
+   * Where the payout request came from. "app" rows are raised automatically
+   * the moment the consigner pays; "erp" rows are raised by operations. Both
+   * are settled the same way, by accounts.
+   */
+  tripSource: "app" | "erp";
+  /** Mirrors public.driver_payment_method, minus razorpayx which never reaches this queue. */
+  paymentMethod: "bank" | "upi" | "bank_transfer" | "upi_manual" | "cheque" | "cash" | null;
   bankAccountHolder: string | null;
   bankAccountNumber: string | null;
   bankIfsc: string | null;

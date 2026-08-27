@@ -171,6 +171,18 @@ export function PayoutOnboardingPanel() {
   );
 }
 
+/**
+ * Payouts still waiting on accounts.
+ *
+ * The queue RPC returns every status when no filter is passed, so this used to
+ * count settled payments too — the panel said "Payment Queue" over a list that
+ * was mostly history, and its count bore no relation to the work outstanding.
+ * Actionable spans three statuses, and the RPC filter takes only one, so the
+ * narrowing happens here (same rule the payments page uses).
+ *
+ * Accounts-only by API: PAYMENTS_ALLOWED_ROLES excludes operations, who also
+ * must not see amounts — so never render this for them.
+ */
 export function PaymentQueuePanel() {
   const q = useQuery({
     queryKey: queryKeys.paymentsQueue({}),
@@ -178,21 +190,82 @@ export function PaymentQueuePanel() {
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
-  const items = q.data ?? [];
+  const pending = (q.data ?? []).filter((p) =>
+    ["pending", "approved", "processing"].includes(p.status),
+  );
+  const totalPending = pending.reduce((sum, p) => sum + p.amount, 0);
   return (
     <DashboardPanel
-      title="Payment Queue" accent="purple" count={items.length}
+      title="Pending Payments" accent="purple" count={pending.length}
       viewAllHref="/payments" emptyIcon={CreditCard} emptyLabel="No payments awaiting action"
-      isLoading={q.isLoading} isEmpty={items.length === 0}
+      isLoading={q.isLoading} isEmpty={pending.length === 0}
     >
-      {items.slice(0, 5).map((p) => (
+      {pending.slice(0, 5).map((p) => (
         <PanelRow
           key={p.id} href="/payments"
-          leading={<RowChip label={p.beneficiary} accent="purple" />}
+          leading={<RowChip label={p.beneficiary} accent={p.tripSource === "app" ? "purple" : "blue"} />}
           title={p.beneficiary}
-          subtitle={`${p.tripCode} · ${prettify(p.type)}`}
+          subtitle={`${p.tripCode} · ${prettify(p.type)} · ${p.tripSource === "app" ? "App" : "ERP"}`}
           trailing={
             <span className="text-sm font-semibold text-gray-900">{formatCurrency(p.amount)}</span>
+          }
+        />
+      ))}
+      {pending.length > 0 && (
+        <p className="px-3 pt-1 text-[11px] text-gray-500">
+          {pending.length} awaiting payout ·{" "}
+          <span className="font-medium text-gray-700">{formatCurrency(totalPending)}</span> total
+        </p>
+      )}
+    </DashboardPanel>
+  );
+}
+
+/**
+ * Trips parked on a payment stage that nobody has raised a request for.
+ *
+ * This is the operations half of "pending payments": accounts cannot pay what
+ * was never requested, and the driver is blocked until it is. Deliberately
+ * carries no amounts, since operations must not see them.
+ *
+ * Two queries because the state spans two stages and the list RPC filters on a
+ * single status. The limit is generous rather than 6 — the trips that matter
+ * here are the forgotten ones, which are the oldest, not the newest.
+ */
+export function PaymentRequestsToRaisePanel() {
+  const advance = useQuery({
+    queryKey: queryKeys.appTrips({ status: "waiting_for_advance", limit: 50 }),
+    queryFn: () => listAppTrips({ status: "waiting_for_advance", limit: 50 }),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const final = useQuery({
+    queryKey: queryKeys.appTrips({ status: "waiting_for_final", limit: 50 }),
+    queryFn: () => listAppTrips({ status: "waiting_for_final", limit: 50 }),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const isLoading = advance.isLoading || final.isLoading;
+  const items = [...(advance.data?.items ?? []), ...(final.data?.items ?? [])]
+    .filter((t) => t.paymentRequestState === "not_requested")
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  return (
+    <DashboardPanel
+      title="Payment Requests To Raise" accent="amber" count={items.length}
+      viewAllHref="/trips" emptyIcon={Banknote} emptyLabel="Nothing waiting on a request"
+      isLoading={isLoading} isEmpty={items.length === 0}
+    >
+      {items.slice(0, 5).map((trip) => (
+        <PanelRow
+          key={trip.id} href={`/trips/${trip.id}`}
+          title={trip.tripNumber}
+          subtitle={`${trip.consignerName} · ${trip.pickupCity} → ${trip.deliveryCity}`}
+          trailing={
+            <Badge variant="outline" className="border-0 bg-red-100 text-[10px] font-medium text-red-700">
+              {trip.status === "waiting_for_final" ? "Final" : "Advance"}
+            </Badge>
           }
         />
       ))}

@@ -67,6 +67,17 @@ export interface AppTripItem {
   deliveryCity: string;
   createdAt: string;
   isEnterprise?: boolean;
+  /**
+   * Only set while the trip sits on a payment stage (waiting_for_advance /
+   * waiting_for_final), null otherwise.
+   *
+   * "not_requested" — the stage was reached but no operations admin has raised
+   * the payment request yet, so accounts has nothing to act on and the driver
+   * is blocked. "requested" — raised, now waiting on accounts.
+   * "consigner_managed" — an enterprise trip, settled from the consigner's own
+   * portal rather than by our operations team.
+   */
+  paymentRequestState: "not_requested" | "requested" | "consigner_managed" | null;
 }
 
 export interface PaymentItem {
@@ -242,6 +253,12 @@ function normalizeTrip(row: Record<string, unknown>): AppTripItem {
     deliveryCity: str(row.delivery_city),
     createdAt: str(row.created_at),
     isEnterprise: row.is_enterprise === true,
+    paymentRequestState:
+      row.payment_request_state === "not_requested" ||
+      row.payment_request_state === "requested" ||
+      row.payment_request_state === "consigner_managed"
+        ? row.payment_request_state
+        : null,
   };
 }
 

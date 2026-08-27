@@ -41,6 +41,43 @@ function prettify(s: string) { return s.split("_").map((p) => p.charAt(0).toUppe
 const ACTIVE_STATUSES = Object.entries(APP_TRIP_STATUS_LABELS)
   .filter(([key]) => !["completed", "cancelled", "driver_rejected"].includes(key));
 
+/**
+ * Reaching waiting_for_advance / waiting_for_final only means ops accepted the
+ * loading proof or POD — the payment request still has to be raised by hand
+ * via "Get Advance" / "Get Final Payment" on the trip. Until that happens
+ * accounts has nothing in their queue and the driver is blocked
+ * (driver_start_delivery refuses with ADVANCE_PENDING), yet the row read
+ * "Waiting for Advance", which sounds like someone else's problem.
+ *
+ * Those rows now say what is actually true. Everything else keeps the plain
+ * stage label — so "Waiting for Advance" now reliably means "requested, with
+ * accounts", and enterprise trips (settled by the consigner in their portal)
+ * are deliberately left alone rather than blamed on ops.
+ */
+function TripStatusBadge({ item }: { item: AppTripItem }) {
+  if (item.paymentRequestState === "not_requested") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-0 bg-red-100 text-xs font-medium text-red-700"
+        title="Proof accepted, but no payment request has been raised yet — accounts has nothing to pay and the driver cannot proceed."
+      >
+        {item.status === "waiting_for_final"
+          ? "Final request not sent"
+          : "Advance request not sent"}
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className={`border-0 font-medium text-xs ${STATUS_COLORS[item.status as AppTripStatus] ?? "bg-gray-100 text-gray-700"}`}
+    >
+      {prettify(item.status)}
+    </Badge>
+  );
+}
+
 const OPS_ROLES = new Set(["operations"]);
 const PAGE_SIZE = 50;
 const TRIP_TERMINAL = new Set(["completed", "cancelled", "driver_rejected"]);
@@ -170,9 +207,7 @@ export default function TripsListPage() {
                       <td className="px-4 py-3 text-gray-700">{item.consignerName}</td>
                       <td className="px-4 py-3 text-gray-700">{item.driverName ?? "—"}</td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className={`border-0 font-medium text-xs ${STATUS_COLORS[item.status as AppTripStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                          {prettify(item.status)}
-                        </Badge>
+                        <TripStatusBadge item={item} />
                       </td>
                       {!isOps && <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(item.tripAmount)}</td>}
                       <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(item.createdAt)}</td>
@@ -198,9 +233,7 @@ export default function TripsListPage() {
                         </Badge>
                       )}
                     </span>
-                    <Badge variant="outline" className={`border-0 font-medium text-xs ${STATUS_COLORS[item.status as AppTripStatus] ?? "bg-gray-100 text-gray-700"}`}>
-                      {prettify(item.status)}
-                    </Badge>
+                    <TripStatusBadge item={item} />
                   </div>
                   <p className="text-sm text-gray-700 mb-1">{item.pickupCity} → {item.deliveryCity}</p>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
