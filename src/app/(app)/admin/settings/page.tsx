@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import {
   getPlatformSetting,
@@ -141,14 +142,13 @@ function CompanyIdentityCard() {
               </Label>
               <div className="flex items-center gap-1.5">
                 <span className="text-sm text-gray-500 shrink-0">+91</span>
-                <Input
+                <NumericInput
                   id="phone"
                   placeholder="9876543210"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  onValueChange={setPhone}
                   className="h-9 text-sm"
-                  inputMode="tel"
-                  maxLength={10}
+                  maxDigits={10}
                 />
               </div>
               <p className="text-[11px] text-gray-400">

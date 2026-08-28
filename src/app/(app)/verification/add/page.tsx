@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { createPartner } from "@/lib/api/verification";
 import { ArrowLeft, Loader2, UserPlus } from "lucide-react";
@@ -100,18 +101,13 @@ export default function AddPartnerPage() {
                 <div className="flex h-9 items-center rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
                   +91
                 </div>
-                <Input
+                <NumericInput
                   id="phone"
-                  type="tel"
-                  inputMode="numeric"
                   placeholder="9876543210"
                   value={form.phone}
-                  onChange={(e) => {
-                    const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
-                    setForm((p) => ({ ...p, phone: digits }));
-                  }}
+                  onValueChange={(digits) => setForm((p) => ({ ...p, phone: digits }))}
                   className="h-9 text-sm flex-1"
-                  maxLength={10}
+                  maxDigits={10}
                 />
               </div>
               <p className="text-[11px] text-gray-500">10-digit mobile number</p>

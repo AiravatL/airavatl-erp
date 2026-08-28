@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -830,13 +831,12 @@ function EditPayoutDialog({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Account Number</Label>
-              <Input
+              <NumericInput
                 value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 18))}
+                onValueChange={setAccountNumber}
                 className="h-9 text-sm"
-                inputMode="numeric"
                 placeholder="8-18 digits"
-                maxLength={18}
+                maxDigits={18}
               />
               {trimmedAccount.length > 0 && !BANK_ACCT_RE.test(trimmedAccount) && (
                 <p className="text-[11px] text-red-500">Account number must be 8-18 digits</p>

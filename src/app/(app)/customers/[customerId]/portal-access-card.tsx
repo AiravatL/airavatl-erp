@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -294,12 +295,11 @@ function CreatePortalUserDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Company phone (shown to drivers)</Label>
-            <Input
-              type="tel"
+            <NumericInput
               className="h-8 text-sm"
               value={form.contactPhone}
-              maxLength={20}
-              onChange={(e) => setForm((p) => ({ ...p, contactPhone: e.target.value }))}
+              maxDigits={15}
+              onValueChange={(digits) => setForm((p) => ({ ...p, contactPhone: digits }))}
               placeholder="e.g. 9876543210"
             />
             <p className="text-[11px] text-gray-400">

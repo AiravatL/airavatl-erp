@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -337,8 +338,8 @@ export default function CustomerDetailPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Company phone (shown to drivers)</Label>
-              <Input type="tel" className="h-8 text-sm" value={editForm.contactPhone} maxLength={20}
-                onChange={(e) => setEditForm((p) => ({ ...p, contactPhone: e.target.value }))}
+              <NumericInput className="h-8 text-sm" value={editForm.contactPhone} maxDigits={15}
+                onValueChange={(digits) => setEditForm((p) => ({ ...p, contactPhone: digits }))}
                 placeholder="e.g. 9876543210" />
               <p className="text-[11px] text-gray-400">
                 Drivers see the company name &amp; this number for this customer&apos;s enterprise trips.

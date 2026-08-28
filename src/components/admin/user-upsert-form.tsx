@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -24,7 +25,9 @@ const EMAIL_MAX_LENGTH = 254;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 72;
 const NOTES_MAX_LENGTH = 500;
-const WHATSAPP_MAX_LENGTH = 24;
+// E.164 caps a phone number at 15 digits. The field holds digits only now, so
+// there is no separator or leading "+" to leave room for.
+const WHATSAPP_MAX_DIGITS = 15;
 
 export interface UserUpsertFormValues {
   fullName: string;
@@ -178,13 +181,24 @@ export function UserUpsertForm({
                   value={form.email}
                   onChange={(event) => updateField("email", event.target.value)}
                   placeholder="name@airavatl.com"
-                  className="h-9 text-sm"
+                  className={`h-9 text-sm ${
+                    mode === "edit" ? "bg-gray-50 text-gray-600" : ""
+                  }`}
                   required
                   autoCapitalize="none"
                   spellCheck={false}
+                  autoComplete="email"
                   maxLength={EMAIL_MAX_LENGTH}
-                  disabled={mode === "edit"}
+                  // readOnly rather than disabled: the address is the sign-in
+                  // identity and cannot change here (the API always saves the
+                  // stored one), but ops still need to select and copy it.
+                  readOnly={mode === "edit"}
                 />
+                {mode === "edit" && (
+                  <p className="text-xs text-gray-500">
+                    Sign-in address — cannot be changed after the user is created.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -210,16 +224,18 @@ export function UserUpsertForm({
                   WhatsApp Number{" "}
                   <span className="font-normal text-gray-400">(optional)</span>
                 </Label>
-                <Input
+                <NumericInput
                   id="whatsapp_number"
-                  type="tel"
-                  inputMode="tel"
                   value={form.whatsappNumber}
-                  onChange={(event) => updateField("whatsappNumber", event.target.value)}
+                  onValueChange={(digits) => updateField("whatsappNumber", digits)}
                   placeholder="e.g. 9876543210"
                   className="h-9 text-sm"
-                  maxLength={WHATSAPP_MAX_LENGTH}
-                  autoComplete="off"
+                  maxDigits={WHATSAPP_MAX_DIGITS}
+                  // "tel", not "off": Chrome ignores "off" on a form that holds
+                  // a password, and would drop the saved username — an email —
+                  // into whichever fillable field it found first, which was
+                  // this one. A specific token gives it the right answer.
+                  autoComplete="tel"
                   aria-invalid={whatsappInvalid}
                 />
                 {whatsappInvalid ? (
@@ -255,6 +271,10 @@ export function UserUpsertForm({
                     minLength={PASSWORD_MIN_LENGTH}
                     maxLength={PASSWORD_MAX_LENGTH}
                     required={mode === "create"}
+                    // Marks this as a set-a-password form, not a sign-in one, so
+                    // the browser stops hunting for a username field to fill and
+                    // never offers the admin's own saved credentials here.
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"

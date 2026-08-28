@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -709,13 +710,12 @@ export default function VerificationDetailPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Aadhaar Number</Label>
-                <Input
+                <NumericInput
                   placeholder="123456789012"
                   value={currentAadhaarNumber}
-                  onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                  onValueChange={setAadhaarNumber}
                   className="h-9 text-sm max-w-xs"
-                  inputMode="numeric"
-                  maxLength={12}
+                  maxDigits={12}
                   disabled={!!isVerified}
                 />
                 {currentAadhaarNumber.length > 0 && !AADHAAR_RE.test(currentAadhaarNumber) && (
@@ -764,13 +764,12 @@ export default function VerificationDetailPage() {
                   <Label className="text-sm font-medium">
                     Account Number{bankTouched && <span className="text-red-500"> *</span>}
                   </Label>
-                  <Input
+                  <NumericInput
                     placeholder="12345678901234"
                     value={currentBankAccount}
-                    onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, "").slice(0, 18))}
+                    onValueChange={setBankAccount}
                     className="h-9 text-sm"
-                    inputMode="numeric"
-                    maxLength={18}
+                    maxDigits={18}
                     disabled={!!isVerified}
                   />
                   {currentBankAccount.length > 0 && !BANK_ACCT_RE.test(currentBankAccount) && (

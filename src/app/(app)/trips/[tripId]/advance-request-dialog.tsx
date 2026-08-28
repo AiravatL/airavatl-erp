@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -230,12 +231,11 @@ function handleQrFileChange(nextFile: File | null) {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-gray-600">Account Number *</Label>
-                  <Input
+                  <NumericInput
                     value={bankAccountNumber}
-                    onChange={(event) => setBankAccountNumber(event.target.value.replace(/[^\d]/g, ""))}
+                    onValueChange={setBankAccountNumber}
                     className="h-8 text-sm"
-                    inputMode="numeric"
-                    maxLength={34}
+                    maxDigits={34}
                   />
                 </div>
               </div>

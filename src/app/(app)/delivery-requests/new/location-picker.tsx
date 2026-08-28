@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { searchPlaces, getPlaceDetails } from "@/lib/api/delivery-requests";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
@@ -183,14 +184,13 @@ export function LocationPicker({
             <Label htmlFor={`${label}-contact-phone`} className="text-xs text-gray-500">
               Contact Phone
             </Label>
-            <Input
+            <NumericInput
               id={`${label}-contact-phone`}
               placeholder="Phone number"
               value={contactPhone}
-              onChange={(e) => onContactPhoneChange(e.target.value)}
+              onValueChange={onContactPhoneChange}
               className="h-8 text-sm"
-              inputMode="tel"
-              maxLength={15}
+              maxDigits={15}
             />
           </div>
         </div>
