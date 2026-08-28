@@ -553,8 +553,12 @@ export default function VerificationDetailPage() {
         {/* Right: Verification Form.
             Scrolls inside itself on large screens so the document preview on the
             left stays put while ops work down the fields. The page still scrolls
-            normally, and below lg the card just grows as before. */}
-        <Card className="lg:col-span-2 lg:row-start-1 lg:row-span-2 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:overscroll-contain">
+            normally, and below lg the card just grows as before.
+
+            No overscroll-contain: once ops hit the bottom of this card the wheel
+            should carry on and scroll the page, rather than dead-stopping until
+            they move the pointer off the card. */}
+        <Card className="lg:col-span-2 lg:row-start-1 lg:row-span-2 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
           <CardContent className="p-4 sm:p-6 space-y-8">
             <h2 className="text-sm font-semibold text-gray-900">Verification Documents &amp; Details</h2>
 

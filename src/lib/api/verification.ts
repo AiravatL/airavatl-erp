@@ -282,16 +282,34 @@ export interface UpdatePartnerProfileInput {
 
 /**
  * Read the UPI ID out of the QR the partner uploaded.
- * Decoding runs server-side because the partner app has no native QR scanner
- * (expo-camera is not one of its dependencies).
+ *
+ * The partner app has no native QR scanner (expo-camera is not one of its
+ * dependencies), so the partner just uploads a photo and we do the reading.
+ * That reading happens in this browser: it used to run in the API route via
+ * `sharp`, a native libvips binding that cannot load on a Workers runtime, so
+ * in production the route died on import and every click returned a bare
+ * "Request failed" while `next dev` worked fine.
+ *
+ * jsQR is pulled in dynamically so it stays out of the main bundle — only ops
+ * on the verification screen who actually click the button ever load it.
  */
 export async function decodePartnerUpiQr(
   userId: string,
 ): Promise<{ upiId: string }> {
-  return apiRequest<{ upiId: string }>(
-    `/api/verification/${userId}/upi-qr/decode`,
-    { method: "POST" },
-  );
+  const response = await fetch(`/api/verification/${userId}/upi-qr/image`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as
+      | { message?: string }
+      | null;
+    throw new Error(payload?.message ?? "Could not load the uploaded QR image");
+  }
+
+  const blob = await response.blob();
+  const { readUpiIdFromBlob } = await import("@/lib/qr/read-upi-qr");
+  return { upiId: await readUpiIdFromBlob(blob) };
 }
 
 export async function updatePartnerProfile(
