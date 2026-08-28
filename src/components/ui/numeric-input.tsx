@@ -19,6 +19,17 @@ import { Input } from "@/components/ui/input";
  * (phone, Aadhaar, account number), not quantities, and must not lose a
  * leading zero or gain a decimal point.
  */
+/**
+ * Indian mobile numbers are ten digits, and every contact phone in the ERP is
+ * stored and dialled bare — no country code. Capping at ten stops the common
+ * paste of "919876543210", which would otherwise be saved as-is and then fail
+ * to dial.
+ *
+ * Not for WhatsApp numbers: those are stored country-coded (91…) because they
+ * are handed straight to MSG91 as the recipient. See user-upsert-form.
+ */
+export const PHONE_MAX_DIGITS = 10;
+
 interface NumericInputProps
   extends Omit<React.ComponentProps<typeof Input>, "onChange" | "value" | "type"> {
   value: string;

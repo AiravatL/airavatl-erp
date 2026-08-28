@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { NumericInput } from "@/components/ui/numeric-input";
+import { NumericInput, PHONE_MAX_DIGITS } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { searchPlaces, getPlaceDetails } from "@/lib/api/delivery-requests";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
@@ -190,7 +190,7 @@ export function LocationPicker({
               value={contactPhone}
               onValueChange={onContactPhoneChange}
               className="h-8 text-sm"
-              maxDigits={15}
+              maxDigits={PHONE_MAX_DIGITS}
             />
           </div>
         </div>

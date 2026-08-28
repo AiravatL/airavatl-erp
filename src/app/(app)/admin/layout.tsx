@@ -9,6 +9,7 @@ const ADMIN_TABS = [
   { href: "/admin/vehicle-master", label: "Vehicle Master" },
   { href: "/admin/settings", label: "Settings" },
   { href: "/admin/app-updates", label: "App Updates" },
+  { href: "/admin/notifications", label: "Notifications" },
   { href: "/admin/otp", label: "OTP Lookup" },
 ];
 

@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { NumericInput } from "@/components/ui/numeric-input";
+import { NumericInput, PHONE_MAX_DIGITS } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import {
   getPlatformSetting,
@@ -148,7 +148,7 @@ function CompanyIdentityCard() {
                   value={phone}
                   onValueChange={setPhone}
                   className="h-9 text-sm"
-                  maxDigits={10}
+                  maxDigits={PHONE_MAX_DIGITS}
                 />
               </div>
               <p className="text-[11px] text-gray-400">

@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { NumericInput } from "@/components/ui/numeric-input";
+import { NumericInput, PHONE_MAX_DIGITS } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -262,7 +262,7 @@ export default function AddLeadPage() {
                     onValueChange={(digits) => updateField("phone", digits)}
                     onBlur={() => markTouched("phone")}
                     className={cn("h-9 text-sm", errors.phone && "border-red-400 focus-visible:ring-red-400")}
-                    maxDigits={10}
+                    maxDigits={PHONE_MAX_DIGITS}
                   />
                 </div>
               </FieldWrapper>
