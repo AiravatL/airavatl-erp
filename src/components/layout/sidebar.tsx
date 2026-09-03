@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-context";
+import { TRIP_REQUESTS_ENABLED } from "@/lib/feature-flags";
 import {
   LayoutDashboard,
   Users,
@@ -76,6 +77,7 @@ export function Sidebar({
   if (!user) return null;
 
   const visibleItems = NAV_ITEMS.filter((item) => {
+    if (!TRIP_REQUESTS_ENABLED && item.href === "/trip-requests") return false;
     if (user.role === "sales_vehicles") {
       return SALES_VEHICLES_ALLOWED_HREFS.has(item.href);
     }

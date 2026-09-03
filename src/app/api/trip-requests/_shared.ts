@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireServerActor } from "@/lib/auth/server-actor";
+import { TRIP_REQUESTS_ENABLED } from "@/lib/feature-flags";
 import type { Role } from "@/lib/types";
 
 export const TRIP_REQUEST_VIEW_ROLES: Role[] = [
@@ -20,7 +21,21 @@ export const TRIP_REQUEST_ADMIN_ROLES: Role[] = [
   "admin",
 ];
 
+/**
+ * Every handler under /api/trip-requests starts here, so the feature flag is
+ * enforced here rather than repeated in each route — a new route added to this
+ * folder is gated the moment it asks for an actor.
+ *
+ * 404, not 403: while the feature is hidden the endpoints should read as
+ * absent, matching the notFound() on the pages. The check runs before the auth
+ * call so a disabled route costs no Supabase round-trip.
+ */
 export async function requireTripRequestActor(allowedRoles: Role[] = TRIP_REQUEST_VIEW_ROLES) {
+  if (!TRIP_REQUESTS_ENABLED) {
+    return {
+      error: NextResponse.json({ ok: false, message: "Not found" }, { status: 404 }),
+    };
+  }
   const actorResult = await requireServerActor(allowedRoles);
   if ("error" in actorResult) return actorResult;
   return { supabase: actorResult.supabase, actor: actorResult.actor };

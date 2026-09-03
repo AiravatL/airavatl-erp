@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { getAppOverview } from "@/lib/api/app-reports";
 import { queryKeys } from "@/lib/query/keys";
 import type { Role } from "@/lib/types";
+import { TRIP_REQUESTS_ENABLED } from "@/lib/feature-flags";
 import { StatCard } from "./_components/dashboard-panel";
 import {
   TripRequestsPanel, ActiveTripsPanel, VerificationPanel,
@@ -16,7 +17,7 @@ import {
 } from "./_components/role-panels";
 import {
   Truck, CreditCard, Receipt, Plus, TicketCheck, Users,
-  PackagePlus, MapPin, BarChart3, ShieldCheck, ClipboardList,
+  PackagePlus, MapPin, BarChart3, ShieldCheck, ClipboardList, TrendingUp,
 } from "lucide-react";
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -125,9 +126,11 @@ function RolePanels({ role }: { role: Role }) {
         </div>
       );
     case "sales_consigner":
-      // Trip requests are still this role's own workflow (they create them
-      // from /trip-requests/new), so the panel stays here even though it is
-      // quiet — enterprise clients go straight to auction and never file one.
+      // Trip requests were this role's own workflow (they created them from
+      // /trip-requests/new). With the feature hidden they have no panel of
+      // their own — the stat cards and quick actions above are the whole
+      // dashboard until it comes back.
+      if (!TRIP_REQUESTS_ENABLED) return null;
       return (
         <div className="grid grid-cols-1 gap-4">
           <TripRequestsPanel />
@@ -158,10 +161,17 @@ function RolePanels({ role }: { role: Role }) {
 function getQuickActions(role: Role) {
   switch (role) {
     case "sales_consigner":
-      return [
-        { label: "New Trip Request", href: "/trip-requests/new", icon: Plus },
-        { label: "Trip Requests", href: "/trip-requests", icon: ClipboardList },
-      ];
+      // Both shortcuts pointed at the hidden Trip Requests section; fall back
+      // to the two pages this role can still reach.
+      return TRIP_REQUESTS_ENABLED
+        ? [
+            { label: "New Trip Request", href: "/trip-requests/new", icon: Plus },
+            { label: "Trip Requests", href: "/trip-requests", icon: ClipboardList },
+          ]
+        : [
+            { label: "Consigner CRM", href: "/consigner-crm", icon: TrendingUp },
+            { label: "Customers", href: "/customers", icon: Users },
+          ];
     case "sales_vehicles":
       return [
         { label: "Verification", href: "/verification", icon: ShieldCheck },
